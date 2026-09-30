@@ -136,14 +136,10 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
 .err{grid-column:1/-1;color:var(--down);font-size:13px;min-height:0}
 .err:empty{display:none}
 
-.cur-select{height:32px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236A6D78' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;appearance:none;-webkit-appearance:none;font-weight:600}
-.cur-select:hover{background-color:var(--hover)}
 .field select{width:100%;height:34px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:#FFFFFF}
 .native{font-size:13px;color:var(--muted);margin-top:2px}
 .eq{display:block;font-size:11px;color:var(--muted);font-weight:400}
 .code{font-size:11px;color:var(--muted);margin-left:3px}
-.eq-label{font-size:13px;color:var(--muted);white-space:nowrap}
-@media (max-width:860px){.eq-label{display:none}}
 .rates{width:100%;border-collapse:collapse;font-size:13px}
 .rates th{font-weight:400;color:var(--muted);text-align:left;padding:4px 0}
 .rates td{padding:5px 0;border-top:1px solid var(--border)}
@@ -235,7 +231,6 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
   .topbar{flex-wrap:wrap;padding:8px 12px;row-gap:8px}
   .topbar .spacer{display:none}
   .search{order:5;flex:1 1 100%}
-  .cur-select{flex:1 1 0;min-width:0;max-width:none}
   .viewbar{padding:8px 12px}
   .add-text{display:none}
   #addBtn{width:36px;padding:0;justify-content:center}
@@ -274,8 +269,6 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
       <input id="search" type="search" placeholder="Search your list" aria-label="Search companies" autocomplete="off">
     </label>
     <div class="spacer"></div>
-    <label class="eq-label" for="displayCur">Equivalent in</label>
-    <select id="displayCur" class="cur-select num"></select>
     <button class="btn" id="ratesBtn" type="button">Rates</button>
     <button class="btn icon-only" id="settingsBtn" type="button" aria-label="Settings" title="Settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13.5a7.7 7.7 0 0 0 .1-1.5 7.7 7.7 0 0 0-.1-1.5l2-1.5-2-3.5-2.4 1a7.8 7.8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5a7.8 7.8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.7 7.7 0 0 0-.1 1.5 7.7 7.7 0 0 0 .1 1.5l-2 1.5 2 3.5 2.4-1a7.8 7.8 0 0 0 2.6 1.5L10 22h4l.4-2.5a7.8 7.8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
@@ -445,7 +438,7 @@ let settings = {display:"USD", rates:Object.assign({}, DEFAULT_RATES), ratesAsOf
 const FX_URL = "https://api.frankfurter.dev/v2/rates?base=USD";
 function rateOf(code){ const r = settings.rates[code]; return (code==="USD") ? 1 : (r>0 ? r : null); }
 function nativeCur(c){ return c.currency || "USD"; }
-function eqCur(){ return CURRENCIES[settings.display] ? settings.display : "USD"; }
+function eqCur(){ return "USD"; }
 // multiplier from a company's own currency to the equivalent currency (null if no rate)
 function eqK(c){ const rf = rateOf(nativeCur(c)), rt = rateOf(eqCur()); return (rf && rt) ? rt/rf : null; }
 function needsEq(c){ return nativeCur(c) !== eqCur(); }
@@ -609,7 +602,6 @@ function sortedCompanies(){
   return Object.values(companies).sort((a,b)=>String(a.ticker).localeCompare(String(b.ticker)));
 }
 function render(){
-  const ds = $("#displayCur"); ds.innerHTML = currencyOptions(eqCur(), false);
   if(selectedId && !companies[selectedId]) selectedId = null;
   renderBoard();
   renderMain();
@@ -1167,7 +1159,7 @@ function openCompany(id){
   $("#companyDlgTitle").textContent = c ? "Edit "+c.ticker : "Add company";
   $("#companySubmit").textContent = c ? "Save changes" : "Add company";
   $("#priceHint").textContent = c ? "Changing it logs the new price under today's date" : "Logged under today's date";
-  const curSel = c ? nativeCur(c) : (CURRENCIES[settings.display] ? settings.display : "USD");
+  const curSel = c ? nativeCur(c) : "USD";
   f.currency.innerHTML = currencyOptions(curSel, false, true) + (c && !CURRENCIES[curSel] ? '<option value="'+esc(curSel)+'" selected>'+esc(curSel)+'</option>' : '');
   f.currency.value = curSel;
   const setLabel = () => { $("#priceLabel").textContent = "Current price ("+f.currency.value+")"; };
@@ -1279,7 +1271,6 @@ async function loadExamples(){
 
 /* ---------- events ---------- */
 $("#addBtn").addEventListener("click", () => openCompany());
-$("#displayCur").addEventListener("change", e => { settings.display = e.target.value; hover = null; saveSettings(); });
 function paintRatesNote(){
   const el = $("#ratesNote"); if(!el) return;
   el.textContent = settings.ratesAsOf ? "Using rates from "+fmtDate(settings.ratesAsOf)+"." : "";
