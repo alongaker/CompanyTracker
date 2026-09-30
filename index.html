@@ -322,12 +322,13 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
   <form id="ratesForm" novalidate>
     <div class="dlg-head"><h2 id="ratesTitle">Exchange rates</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
     <div class="dlg-body" style="grid-template-columns:1fr">
-      <p style="margin:0;color:var(--muted);font-size:13px">How much of each currency 1 US dollar buys. Update these whenever you like; every price on the page converts using them.</p>
+      <p style="margin:0;color:var(--muted);font-size:13px">How much of each currency 1 US dollar buys. These update from Frankfurter’s free daily rates, with no account or key. You can still change a number and save.</p>
+      <p id="ratesNote" class="hint" style="margin:0"></p>
       <table class="rates num"><thead><tr><th scope="col">Currency</th><th scope="col">Per 1 USD</th></tr></thead><tbody id="ratesBody"></tbody></table>
       <div class="field"><label for="r-asof">Rates as of</label><input id="r-asof" name="asOf" type="date"></div>
       <p class="err" id="ratesErr" role="alert"></p>
     </div>
-    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save rates</button></div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn" id="ratesUpdate">Update rates</button><button type="submit" class="btn btn-primary">Save rates</button></div>
   </form>
 </dialog>
 
@@ -440,7 +441,8 @@ function matchExchange(text){
 }
 function exchangeOf(c){ return (c.exchangeMic && EXCHANGE_BY_MIC[c.exchangeMic]) || matchExchange(c.exchange); }
 const SETTINGS_KEY = "company-tracker:settings:v1";
-let settings = {display:"USD", rates:Object.assign({}, DEFAULT_RATES), ratesAsOf:"2026-09-28", favExchanges:[], favCurrencies:[]};
+let settings = {display:"USD", rates:Object.assign({}, DEFAULT_RATES), ratesAsOf:"2026-09-28", ratesChecked:"", favExchanges:[], favCurrencies:[]};
+const FX_URL = "https://api.frankfurter.dev/v2/rates?base=USD";
 function rateOf(code){ const r = settings.rates[code]; return (code==="USD") ? 1 : (r>0 ? r : null); }
 function nativeCur(c){ return c.currency || "USD"; }
 function eqCur(){ return CURRENCIES[settings.display] ? settings.display : "USD"; }
@@ -506,6 +508,7 @@ function applySettings(d){
   settings.collapsed = (d.collapsed && typeof d.collapsed==="object") ? d.collapsed : (settings.collapsed || {});
   settings.favExchanges = keptFavs(d.favExchanges, k => !!EXCHANGE_BY_MIC[k]);
   settings.favCurrencies = keptFavs(d.favCurrencies, k => !!CURRENCIES[k]);
+  settings.ratesChecked = /^\d{4}-\d{2}-\d{2}$/.test(String(d.ratesChecked||"")) ? d.ratesChecked : "";
 }
 async function saveSettings(){
   render();
@@ -592,14 +595,14 @@ async function init(){
       db.collection("data/users/"+uid).onSnapshot(snap => {
         const next = {};
         snap.docs.forEach(s => { if(!s.exists) return; if(s.id==="settings") applySettings(clone(s.data())); else if(s.id==="layout") applyLayout(clone(s.data())); else next[s.id] = clone(s.data()); });
-        companies = next; mode = "db"; render();
+        companies = next; mode = "db"; render(); refreshRates(false);
       }, err => { if(err && err.code==="revoked") return; toast("Sync paused. Reload to reconnect."); });
       return;
     }
   }catch(e){}
   useLocal();
 }
-function useLocal(){ mode="local"; loadLocal(); loadSettingsLocal(); loadLayoutLocal(); render(); }
+function useLocal(){ mode="local"; loadLocal(); loadSettingsLocal(); loadLayoutLocal(); render(); refreshRates(false); }
 
 /* ---------- rendering ---------- */
 function sortedCompanies(){
@@ -1277,13 +1280,69 @@ async function loadExamples(){
 /* ---------- events ---------- */
 $("#addBtn").addEventListener("click", () => openCompany());
 $("#displayCur").addEventListener("change", e => { settings.display = e.target.value; hover = null; saveSettings(); });
+function paintRatesNote(){
+  const el = $("#ratesNote"); if(!el) return;
+  el.textContent = settings.ratesAsOf ? "Using rates from "+fmtDate(settings.ratesAsOf)+"." : "";
+}
+function fillRatesForm(){
+  if(!$("#ratesDlg").open) return;
+  for(const k of Object.keys(CURRENCIES)){
+    const input = $("#ratesForm").elements["rate-"+k];
+    if(input) input.value = k==="USD" ? 1 : (settings.rates[k] ?? "");
+  }
+  $("#r-asof").value = settings.ratesAsOf || "";
+  paintRatesNote();
+}
+let ratesInflight = false;
+async function refreshRates(manual){
+  if(ratesInflight) return;
+  if(!manual && settings.ratesChecked===today()) return;
+  if(!manual && $("#ratesDlg").open) return;
+  ratesInflight = true;
+  try{
+    const res = await fetch(FX_URL);
+    if(!res.ok) throw new Error("status");
+    const rows = await res.json();
+    if(!Array.isArray(rows)) throw new Error("shape");
+    const next = Object.assign({USD:1}, settings.rates);
+    let date = "", got = 0;
+    const missing = [];
+    for(const code of Object.keys(CURRENCIES)){
+      if(code==="USD") continue;
+      const row = rows.find(r => r && r.quote===code && r.base==="USD" && r.rate>0);
+      if(!row){ missing.push(code); continue; }
+      next[code] = row.rate;
+      if(row.date > date) date = row.date;
+      got++;
+    }
+    if(!got || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("empty");
+    settings.rates = next;
+    settings.ratesAsOf = date;
+    settings.ratesChecked = today();
+    await saveSettings();
+    fillRatesForm();
+    if(manual){
+      $("#ratesErr").textContent = missing.length ? "No automatic rate for "+missing.join(", ")+". The others were updated." : "";
+      toast(missing.length ? "Rates updated, except "+missing.join(", ") : "Rates updated");
+    }
+  }catch(e){
+    if(manual) $("#ratesErr").textContent = "Couldn’t reach the rate service. You can type the numbers in and save.";
+  }finally{ ratesInflight = false; }
+}
 $("#ratesBtn").addEventListener("click", () => {
   $("#ratesErr").textContent = "";
   $("#ratesBody").innerHTML = Object.keys(CURRENCIES).map(k =>
     '<tr><td><b>'+k+'</b> <span style="color:var(--muted)">'+esc(CURRENCIES[k].name)+'</span></td>'+
     '<td><input type="number" step="any" min="0" inputmode="decimal" name="rate-'+k+'" aria-label="'+esc(k)+' per 1 USD" value="'+(k==="USD"?1:(settings.rates[k] ?? ""))+'"'+(k==="USD"?" disabled":"")+'></td></tr>').join("");
   $("#r-asof").value = settings.ratesAsOf || "";
+  paintRatesNote();
   $("#ratesDlg").showModal();
+});
+$("#ratesUpdate").addEventListener("click", async () => {
+  const btn = $("#ratesUpdate");
+  btn.disabled = true; btn.textContent = "Updating…";
+  await refreshRates(true);
+  btn.disabled = false; btn.textContent = "Update rates";
 });
 $("#ratesForm").addEventListener("submit", e => {
   e.preventDefault();
@@ -1293,6 +1352,7 @@ $("#ratesForm").addEventListener("submit", e => {
     if(v==null || v<=0){ $("#ratesErr").textContent = "Enter a rate above 0 for "+k+"."; e.target["rate-"+k].focus(); return; }
     next[k] = v; }
   settings.rates = next; settings.ratesAsOf = $("#r-asof").value || today();
+  settings.ratesChecked = today();
   $("#ratesDlg").close(); saveSettings(); toast("Rates saved");
 });
 $("#search").addEventListener("input", e => { query = e.target.value; renderBoard(); });
