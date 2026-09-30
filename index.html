@@ -150,6 +150,28 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
 .rates td:last-child{width:130px}
 .rates input{width:100%;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:#fff;text-align:right}
 .rates input:disabled{background:var(--panel-2);color:var(--muted)}
+.icon-only{width:32px;padding:0;justify-content:center}
+.settings-dlg{width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto}
+.settings-tabs{display:flex;gap:2px;padding:8px 16px 0}
+.settings-panel{padding:12px 20px 16px}
+.settings-lead{margin:0 0 12px;color:var(--muted);font-size:13px}
+.catalog-scroll{max-height:min(340px,42vh);overflow:auto;border:1px solid var(--border);border-radius:8px}
+.catalog{width:100%;border-collapse:collapse;font-size:13px}
+.catalog th{font-weight:500;color:var(--muted);text-align:left;padding:6px 8px;position:sticky;top:0;background:var(--panel);z-index:1}
+.catalog td{padding:6px 8px;border-top:1px solid var(--border);vertical-align:middle}
+.catalog td.num{text-align:right}
+.catalog td.actions{text-align:right;white-space:nowrap;width:1%}
+.catalog tr.is-editing td{background:var(--select)}
+.catalog .mini{height:26px;padding:0 8px;font-size:12px}
+.catalog-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.catalog-form .span-2{grid-column:span 2}
+.catalog-form .span-all{grid-column:1/-1}
+.catalog-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.catalog-actions .end{display:flex;gap:8px}
+@media (max-width:860px){
+  .catalog-form,.catalog-form .span-2{grid-template-columns:1fr;grid-column:auto}
+  .catalog-form .span-2,.catalog-form .span-all{grid-column:auto}
+}
 /* view bar */
 .viewbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
 .tabs{display:flex;gap:2px;overflow-x:auto;min-width:0;flex:1 1 auto;scrollbar-width:thin}
@@ -262,6 +284,9 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
     <label class="eq-label" for="displayCur">Equivalent in</label>
     <select id="displayCur" class="cur-select num"></select>
     <button class="btn" id="ratesBtn" type="button">Rates</button>
+    <button class="btn icon-only" id="settingsBtn" type="button" aria-label="Settings" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13.5a7.7 7.7 0 0 0 .1-1.5 7.7 7.7 0 0 0-.1-1.5l2-1.5-2-3.5-2.4 1a7.8 7.8 0 0 0-2.6-1.5L14 2h-4l-.4 2.5a7.8 7.8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5a7.7 7.7 0 0 0-.1 1.5 7.7 7.7 0 0 0 .1 1.5l-2 1.5 2 3.5 2.4-1a7.8 7.8 0 0 0 2.6 1.5L10 22h4l.4-2.5a7.8 7.8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+    </button>
     <button class="btn btn-primary" id="addBtn" type="button" aria-label="Add company">
       <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span class="add-text">Add company</span>
@@ -348,6 +373,16 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
   </form>
 </dialog>
 
+<!-- Settings -->
+<dialog id="settingsDlg" class="settings-dlg" aria-labelledby="settingsTitle">
+  <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+  <div class="settings-tabs" id="settingsTabs" role="tablist" aria-label="Settings sections">
+    <button class="tab" type="button" role="tab" data-settings-tab="currencies" aria-pressed="true" aria-selected="true">Currencies</button>
+    <button class="tab" type="button" role="tab" data-settings-tab="exchanges" aria-pressed="false" aria-selected="false">Exchanges</button>
+  </div>
+  <div class="settings-panel" id="settingsPanel"></div>
+</dialog>
+
 <!-- Confirm dialog -->
 <dialog id="confirmDlg" aria-labelledby="confirmTitle" style="width:min(380px,calc(100vw - 24px))">
   <div class="dlg-head"><h2 id="confirmTitle">Delete company?</h2></div>
@@ -374,19 +409,19 @@ let editingId = null;
 let hover = null;
 let chart = null;
 let query = "";
-const CURRENCIES = {
-  USD:{name:"US dollar", sym:"$"}, EUR:{name:"Euro", sym:"€"}, JPY:{name:"Japanese yen", sym:"¥"},
-  GBP:{name:"British pound", sym:"£"}, CNY:{name:"Chinese yuan", sym:"CN¥"}, AUD:{name:"Australian dollar", sym:"A$"},
-  CAD:{name:"Canadian dollar", sym:"C$"}, CHF:{name:"Swiss franc", sym:"CHF"},
-  MXN:{name:"Mexican peso", sym:"MX$"}, NGN:{name:"Nigerian naira", sym:"₦"}, HKD:{name:"Hong Kong dollar", sym:"HK$"}
-};
+const DEFAULT_CURRENCIES = [
+  {code:"USD", name:"US dollar", sym:"$"}, {code:"EUR", name:"Euro", sym:"€"}, {code:"JPY", name:"Japanese yen", sym:"¥"},
+  {code:"GBP", name:"British pound", sym:"£"}, {code:"CNY", name:"Chinese yuan", sym:"CN¥"}, {code:"AUD", name:"Australian dollar", sym:"A$"},
+  {code:"CAD", name:"Canadian dollar", sym:"C$"}, {code:"CHF", name:"Swiss franc", sym:"CHF"},
+  {code:"MXN", name:"Mexican peso", sym:"MX$"}, {code:"NGN", name:"Nigerian naira", sym:"₦"}, {code:"HKD", name:"Hong Kong dollar", sym:"HK$"}
+];
 // Units of each currency per 1 USD, from ECB reference rates on 2026-09-28
 const DEFAULT_RATES = {USD:1, EUR:0.8789, JPY:156.88, GBP:0.7540, CNY:6.7105, AUD:1.4237, CAD:1.4166, CHF:0.8318, MXN:17.87, NGN:1331.33, HKD:7.84};
 // MXN: market rate on 2026-09-29; NGN: CBN official (NFEM) rate on 2026-09-28; HKD: pegged band, ~7.84 in Sep 2026
 
 // Exchanges keyed by ISO 10383 MIC code, the identifier market-data APIs use.
 // currency = the exchange's usual trading currency (auto-fills the form).
-const EXCHANGES = [
+const DEFAULT_EXCHANGES = [
   {mic:"XNYS", short:"NYSE",       name:"New York Stock Exchange",      country:"US", currency:"USD"},
   {mic:"XNAS", short:"Nasdaq",     name:"Nasdaq",                       country:"US", currency:"USD"},
   {mic:"XTSE", short:"TSX",        name:"Toronto Stock Exchange",       country:"CA", currency:"CAD"},
@@ -403,7 +438,11 @@ const EXCHANGES = [
   {mic:"XHKG", short:"HKEX",       name:"Hong Kong Stock Exchange",     country:"HK", currency:"HKD"},
   {mic:"XASX", short:"ASX",        name:"Australian Securities Exchange", country:"AU", currency:"AUD"}
 ];
-const EXCHANGE_BY_MIC = Object.fromEntries(EXCHANGES.map(x=>[x.mic,x]));
+let CURRENCIES = {};
+let EXCHANGES = [];
+let EXCHANGE_BY_MIC = {};
+let settingsTab = "currencies";
+let catalogEdit = null;
 // Match older free-text entries ("NASDAQ", "nyse", "London Stock Exchange") to a listed exchange.
 function matchExchange(text){
   const t = String(text||"").trim().toLowerCase(); if(!t) return null;
@@ -411,7 +450,55 @@ function matchExchange(text){
 }
 function exchangeOf(c){ return (c.exchangeMic && EXCHANGE_BY_MIC[c.exchangeMic]) || matchExchange(c.exchange); }
 const SETTINGS_KEY = "company-tracker:settings:v1";
-let settings = {display:"USD", rates:Object.assign({}, DEFAULT_RATES), ratesAsOf:"2026-09-28"};
+let settings = {display:"USD", rates:Object.assign({}, DEFAULT_RATES), ratesAsOf:"2026-09-28", currencies:null, exchanges:null};
+function currencyList(){ return settings.currencies || DEFAULT_CURRENCIES; }
+function exchangeList(){ return settings.exchanges || DEFAULT_EXCHANGES; }
+function syncCatalog(){
+  CURRENCIES = {};
+  currencyList().forEach(c => { CURRENCIES[c.code] = {name:c.name, sym:c.sym}; });
+  EXCHANGES = exchangeList().map(x => ({mic:x.mic, short:x.short, name:x.name, country:x.country, currency:x.currency}));
+  EXCHANGE_BY_MIC = Object.fromEntries(EXCHANGES.map(x => [x.mic, x]));
+}
+function ensureCurrencyList(){
+  if(!Array.isArray(settings.currencies)) settings.currencies = DEFAULT_CURRENCIES.map(c => ({code:c.code, name:c.name, sym:c.sym}));
+  return settings.currencies;
+}
+function ensureExchangeList(){
+  if(!Array.isArray(settings.exchanges)) settings.exchanges = DEFAULT_EXCHANGES.map(x => ({mic:x.mic, short:x.short, name:x.name, country:x.country, currency:x.currency}));
+  return settings.exchanges;
+}
+function sanitizeCurrencies(list){
+  const out = [], seen = new Set();
+  for(const raw of list){
+    if(!raw || typeof raw !== "object") continue;
+    const code = String(raw.code||"").trim().toUpperCase();
+    const name = String(raw.name||"").trim().slice(0,40);
+    const sym = String(raw.sym||"").trim().slice(0,8);
+    if(!/^[A-Z]{2,6}$/.test(code) || seen.has(code) || !name || !sym) continue;
+    seen.add(code);
+    out.push({code, name, sym});
+  }
+  if(!seen.has("USD")) out.unshift({code:"USD", name:"US dollar", sym:"$"});
+  else if(out[0] && out[0].code!=="USD"){ const i = out.findIndex(c => c.code==="USD"); if(i>0) out.unshift(out.splice(i,1)[0]); }
+  return out;
+}
+function sanitizeExchanges(list){
+  const out = [], seenMic = new Set(), seenShort = new Set();
+  for(const raw of list){
+    if(!raw || typeof raw !== "object") continue;
+    const short = String(raw.short||"").trim().slice(0,24);
+    const name = String(raw.name||"").trim().slice(0,80);
+    const country = COUNTRIES[raw.country] ? raw.country : "";
+    const currency = String(raw.currency||"").trim().toUpperCase();
+    const mic = String(raw.mic||"").trim().toUpperCase();
+    if(!short || !name || !country || !/^[A-Z0-9]{4,16}$/.test(mic)) continue;
+    if(seenMic.has(mic) || seenShort.has(short.toLowerCase())) continue;
+    seenMic.add(mic); seenShort.add(short.toLowerCase());
+    out.push({mic, short, name, country, currency: currency || "USD"});
+  }
+  return out;
+}
+syncCatalog();
 function rateOf(code){ const r = settings.rates[code]; return (code==="USD") ? 1 : (r>0 ? r : null); }
 function nativeCur(c){ return c.currency || "USD"; }
 function eqCur(){ return CURRENCIES[settings.display] ? settings.display : "USD"; }
@@ -444,13 +531,16 @@ function fmtCap(v){
   return u ? fmt(v/u[0], 2)+u[1] : fmt(v, 0);
 }
 function currencyOptions(sel, includeNative){
-  const opts = Object.keys(CURRENCIES).map(k=>'<option value="'+k+'"'+(k===sel?" selected":"")+'>'+k+' – '+CURRENCIES[k].name+'</option>');
+  const opts = Object.keys(CURRENCIES).map(k=>'<option value="'+esc(k)+'"'+(k===sel?" selected":"")+'>'+esc(k)+' – '+esc(CURRENCIES[k].name)+' ('+esc(CURRENCIES[k].sym)+')</option>');
   if(includeNative) opts.push('<option value="NATIVE"'+(sel==="NATIVE"?" selected":"")+'>Own currency</option>');
   return opts.join("");
 }
 function loadSettingsLocal(){ try{ const raw=localStorage.getItem(SETTINGS_KEY); if(raw) applySettings(JSON.parse(raw)); }catch(e){} }
 function applySettings(d){
   if(!d) return;
+  settings.currencies = Array.isArray(d.currencies) ? sanitizeCurrencies(d.currencies) : null;
+  settings.exchanges = Array.isArray(d.exchanges) ? sanitizeExchanges(d.exchanges) : null;
+  syncCatalog();
   settings.display = (d.display && CURRENCIES[d.display]) ? d.display : "USD";
   settings.rates = Object.assign({}, DEFAULT_RATES, d.rates||{});
   settings.ratesAsOf = d.ratesAsOf || settings.ratesAsOf;
@@ -513,6 +603,13 @@ function loadLocal(){
   try{ const raw = localStorage.getItem(LS_KEY); companies = raw ? JSON.parse(raw) : {}; }catch(e){ companies = {}; }
 }
 function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(companies)); }catch(e){ toast("Couldn't save in this browser."); } }
+async function persistCompanies(list){
+  if(!list || !list.length) return;
+  if(mode==="db"){
+    try{ for(const c of list) await db.collection("data/users/"+uid).doc(c.id).set(c); }
+    catch(e){ toast("Couldn't save every company that used this. Try again."); }
+  } else persistLocal();
+}
 
 async function saveCompany(c){
   companies[c.id] = c; render();
@@ -558,6 +655,7 @@ function sortedCompanies(){
   return Object.values(companies).sort((a,b)=>String(a.ticker).localeCompare(String(b.ticker)));
 }
 function render(){
+  syncCatalog();
   const ds = $("#displayCur"); ds.innerHTML = currencyOptions(eqCur(), false);
   if(selectedId && !companies[selectedId]) selectedId = null;
   renderBoard();
@@ -1226,7 +1324,7 @@ $("#ratesBtn").addEventListener("click", () => {
   $("#ratesErr").textContent = "";
   $("#ratesBody").innerHTML = Object.keys(CURRENCIES).map(k =>
     '<tr><td><b>'+k+'</b> <span style="color:var(--muted)">'+esc(CURRENCIES[k].name)+'</span></td>'+
-    '<td><input type="number" step="any" min="0" inputmode="decimal" name="rate-'+k+'" aria-label="'+k+' per 1 USD" value="'+(k==="USD"?1:settings.rates[k])+'"'+(k==="USD"?" disabled":"")+'></td></tr>').join("");
+    '<td><input type="number" step="any" min="0" inputmode="decimal" name="rate-'+k+'" aria-label="'+esc(k)+' per 1 USD" value="'+(k==="USD"?1:(settings.rates[k] ?? ""))+'"'+(k==="USD"?" disabled":"")+'></td></tr>').join("");
   $("#r-asof").value = settings.ratesAsOf || "";
   $("#ratesDlg").showModal();
 });
@@ -1257,6 +1355,235 @@ $("#main").addEventListener("click", e => {
 let rz; window.addEventListener("resize", () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { if($("#detailDlg").open) draw(); }); });
 try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw); }catch(e){}
 new MutationObserver(draw).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+
+/* ---------- settings: currencies and exchanges ---------- */
+function isAutoMic(mic){ return /^U[A-Z0-9]{5,}$/.test(mic||""); }
+function newMic(){
+  let mic = "", guard = 0;
+  do {
+    mic = ("U"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)).toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,16);
+    guard++;
+  } while((EXCHANGE_BY_MIC[mic] || mic.length<4) && guard<8);
+  return mic;
+}
+function catalogError(msg){ const el = $("#catalogErr"); if(el) el.textContent = msg; else toast(msg); }
+function rateText(code){ if(code==="USD") return "1"; const r = settings.rates[code]; return r>0 ? String(r) : ""; }
+function companiesOnCurrency(code){ return Object.values(companies).filter(c => nativeCur(c)===code); }
+function companiesOnExchange(mic){ return Object.values(companies).filter(c => { const ex = exchangeOf(c); return ex && ex.mic===mic; }); }
+function retagCurrency(from, to){
+  const changed = [];
+  Object.values(companies).forEach(c => {
+    if(nativeCur(c)!==from) return;
+    c.currency = to; c.updatedAt = Date.now(); changed.push(c);
+  });
+  if(exchangeList().some(x => x.currency===from)) ensureExchangeList().forEach(x => { if(x.currency===from) x.currency = to; });
+  if(from!=="USD" && settings.rates){
+    if(settings.rates[from]!=null) settings.rates[to] = settings.rates[from];
+    delete settings.rates[from];
+  }
+  if(settings.display===from) settings.display = to;
+  return changed;
+}
+function relinkExchange(oldMic, next){
+  const changed = [];
+  Object.values(companies).forEach(c => {
+    const linked = c.exchangeMic===oldMic || (!c.exchangeMic && exchangeOf(c) && exchangeOf(c).mic===oldMic);
+    if(!linked) return;
+    if(c.exchangeMic===next.mic && c.exchange===next.short) return;
+    c.exchangeMic = next.mic; c.exchange = next.short; c.updatedAt = Date.now();
+    changed.push(c);
+  });
+  return changed;
+}
+function countryOptions(sel){
+  return Object.entries(COUNTRIES).sort((a,b)=>a[1].localeCompare(b[1])).map(([k,v]) =>
+    '<option value="'+k+'"'+(k===sel?" selected":"")+'>'+esc(v)+'</option>').join("");
+}
+function currencyPanel(){
+  const editing = catalogEdit && catalogEdit.kind==="currency" ? currencyList().find(c => c.code===catalogEdit.original) : null;
+  if(catalogEdit && catalogEdit.kind==="currency" && !editing) catalogEdit = null;
+  const lock = editing && editing.code==="USD";
+  const rows = currencyList().map(c => '<tr'+(editing && editing.code===c.code?' class="is-editing"':'')+'>'+
+    '<td><b>'+esc(c.code)+'</b></td><td>'+esc(c.name)+'</td><td>'+esc(c.sym)+'</td>'+
+    '<td class="num">'+esc(rateText(c.code) || "—")+'</td><td class="actions">'+
+      '<button type="button" class="btn mini" data-edit-cur="'+esc(c.code)+'">Edit</button>'+
+      (c.code==="USD" ? '' : '<button type="button" class="icon-btn btn-danger" data-del-cur="'+esc(c.code)+'" aria-label="Remove '+esc(c.code)+'">✕</button>')+
+    '</td></tr>').join("");
+  return '<p class="settings-lead">These show up in the currency menus. The rate is how much of that currency 1 US dollar buys. USD is the base and can’t be removed.</p>'+
+    '<div class="catalog-scroll"><table class="catalog"><thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Symbol</th><th scope="col">Per 1 USD</th><th scope="col"><span class="sr" style="position:absolute;left:-9999px">Actions</span></th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<form id="catalogForm" class="catalog-form" autocomplete="off">'+
+      '<div class="field"><label for="cat-code">Code</label><input id="cat-code" name="code" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KRW" value="'+(editing?esc(editing.code):"")+'"'+(lock?' disabled':'')+'></div>'+
+      '<div class="field span-2"><label for="cat-name">Name</label><input id="cat-name" name="name" maxlength="40" placeholder="South Korean won" value="'+(editing?esc(editing.name):"")+'"></div>'+
+      '<div class="field"><label for="cat-sym">Symbol</label><input id="cat-sym" name="sym" maxlength="8" placeholder="₩" value="'+(editing?esc(editing.sym):"")+'"></div>'+
+      '<div class="field"><label for="cat-rate">Per 1 USD</label><input id="cat-rate" name="rate" type="number" step="any" min="0" inputmode="decimal" placeholder="1350" value="'+(editing?esc(rateText(editing.code)):"")+'"'+(lock?' disabled':'')+'></div>'+
+      '<p class="hint span-all" style="margin:0">How many of this currency one US dollar buys. Same number as in Rates.</p>'+
+      '<p class="err span-all" id="catalogErr" role="alert"></p>'+
+      '<div class="catalog-actions span-all"><button type="button" class="btn btn-ghost" data-catalog-reset="currencies">Reset to built-in list</button><span class="end">'+
+        (editing?'<button type="button" class="btn" data-catalog-cancel>Cancel</button>':'')+
+        '<button type="submit" class="btn btn-primary">'+(editing?'Save changes':'Add currency')+'</button></span></div>'+
+    '</form>';
+}
+function exchangePanel(){
+  const editing = catalogEdit && catalogEdit.kind==="exchange" ? exchangeList().find(x => x.mic===catalogEdit.original) : null;
+  if(catalogEdit && catalogEdit.kind==="exchange" && !editing) catalogEdit = null;
+  const cur = editing ? editing.currency : "USD";
+  const extra = cur && !CURRENCIES[cur] ? '<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>' : '';
+  const micValue = editing && !isAutoMic(editing.mic) ? editing.mic : "";
+  const rows = exchangeList().map(x => '<tr'+(editing && editing.mic===x.mic?' class="is-editing"':'')+'>'+
+    '<td><b>'+esc(x.short)+'</b></td><td>'+esc(x.name)+'</td>'+
+    '<td>'+(x.country?'<span class="flag">'+flag(x.country)+'</span> '+esc(COUNTRIES[x.country]||x.country):'—')+'</td>'+
+    '<td>'+esc(x.currency||"")+'</td><td class="num">'+(isAutoMic(x.mic)?"—":esc(x.mic))+'</td><td class="actions">'+
+      '<button type="button" class="btn mini" data-edit-ex="'+esc(x.mic)+'">Edit</button>'+
+      '<button type="button" class="icon-btn btn-danger" data-del-ex="'+esc(x.mic)+'" aria-label="Remove '+esc(x.short)+'">✕</button>'+
+    '</td></tr>').join("");
+  return '<p class="settings-lead">These show up in the exchange menu. Other… stays available on a company, for a one-off name.</p>'+
+    '<div class="catalog-scroll"><table class="catalog"><thead><tr><th scope="col">Short name</th><th scope="col">Full name</th><th scope="col">Country</th><th scope="col">Currency</th><th scope="col">Code</th><th scope="col"><span class="sr" style="position:absolute;left:-9999px">Actions</span></th></tr></thead><tbody>'+
+      (rows || '<tr><td colspan="6" class="row-empty">No exchanges yet.</td></tr>')+'</tbody></table></div>'+
+    '<form id="catalogForm" class="catalog-form" autocomplete="off">'+
+      '<div class="field"><label for="cat-short">Short name</label><input id="cat-short" name="short" maxlength="24" placeholder="KRX" value="'+(editing?esc(editing.short):"")+'"></div>'+
+      '<div class="field span-2"><label for="cat-exname">Full name</label><input id="cat-exname" name="name" maxlength="80" placeholder="Korea Exchange" value="'+(editing?esc(editing.name):"")+'"></div>'+
+      '<div class="field"><label for="cat-country">Country</label><select id="cat-country" name="country"><option value="">Choose</option>'+countryOptions(editing?editing.country:"")+'</select></div>'+
+      '<div class="field"><label for="cat-excur">Trading currency</label><select id="cat-excur" name="currency">'+currencyOptions(CURRENCIES[cur]?cur:"", false)+extra+'</select></div>'+
+      '<div class="field span-2"><label for="cat-mic">Market code</label><input id="cat-mic" name="mic" maxlength="16" autocapitalize="characters" spellcheck="false" placeholder="Optional, e.g. XKRX" value="'+esc(micValue)+'"><div class="hint">Optional. A short market code such as XNYS. Leave blank if you don’t have one.</div></div>'+
+      '<p class="err span-all" id="catalogErr" role="alert"></p>'+
+      '<div class="catalog-actions span-all"><button type="button" class="btn btn-ghost" data-catalog-reset="exchanges">Reset to built-in list</button><span class="end">'+
+        (editing?'<button type="button" class="btn" data-catalog-cancel>Cancel</button>':'')+
+        '<button type="submit" class="btn btn-primary">'+(editing?'Save changes':'Add exchange')+'</button></span></div>'+
+    '</form>';
+}
+function renderSettingsPanel(){
+  document.querySelectorAll("[data-settings-tab]").forEach(b => {
+    const on = b.dataset.settingsTab===settingsTab;
+    b.setAttribute("aria-pressed", String(on));
+    b.setAttribute("aria-selected", String(on));
+  });
+  $("#settingsPanel").innerHTML = settingsTab==="exchanges" ? exchangePanel() : currencyPanel();
+  if(!catalogEdit) return;
+  const el = $("#cat-code") || $("#cat-short");
+  const focus = el && !el.disabled ? el : ($("#cat-name") || $("#cat-exname"));
+  if(focus){ focus.focus(); if(focus.select) focus.select(); }
+}
+function openSettings(){ catalogEdit = null; renderSettingsPanel(); $("#settingsDlg").showModal(); }
+async function saveCurrencyForm(f){
+  const editing = catalogEdit && catalogEdit.kind==="currency" ? currencyList().find(c => c.code===catalogEdit.original) : null;
+  const code = f.elements.code.value.trim().toUpperCase();
+  const name = f.elements.name.value.trim();
+  const sym = f.elements.sym.value.trim();
+  const rate = code==="USD" ? 1 : num(f.elements.rate.value);
+  if(editing && editing.code==="USD" && code!=="USD"){ catalogError("USD stays the base currency."); return; }
+  if(!/^[A-Z]{2,6}$/.test(code)){ catalogError("Use 2–6 letters for the code, like KRW."); f.elements.code.focus(); return; }
+  if(!name){ catalogError("Enter the currency name."); f.elements.name.focus(); return; }
+  if(!sym){ catalogError("Enter a symbol, like ₩ or HK$."); f.elements.sym.focus(); return; }
+  if(rate==null || rate<=0){ catalogError("Enter how many of this currency 1 US dollar buys."); f.elements.rate.focus(); return; }
+  if(currencyList().some(c => c.code===code && (!editing || c.code!==editing.code))){ catalogError(code+" is already in the list."); f.elements.code.focus(); return; }
+  const changed = editing && editing.code!==code ? retagCurrency(editing.code, code) : [];
+  settings.rates[code] = rate;
+  const list = ensureCurrencyList();
+  const row = {code, name, sym};
+  if(editing){
+    const i = list.findIndex(c => c.code===editing.code);
+    if(i<0){ catalogError("That currency is no longer in the list."); return; }
+    list[i] = row;
+  } else list.push(row);
+  syncCatalog();
+  await persistCompanies(changed);
+  catalogEdit = null;
+  await saveSettings();
+  renderSettingsPanel();
+  toast(editing ? code+" saved" : code+" added");
+}
+function deleteCurrency(code){
+  if(code==="USD") return;
+  const usedByEx = exchangeList().filter(x => x.currency===code);
+  if(usedByEx.length){
+    const names = usedByEx.slice(0,3).map(x => x.short).join(", ");
+    catalogError(code+" is the trading currency for "+names+(usedByEx.length>3?"…":"")+". Change those exchanges first.");
+    return;
+  }
+  const n = companiesOnCurrency(code).length;
+  const go = () => {
+    settings.currencies = ensureCurrencyList().filter(c => c.code!==code);
+    if(settings.rates) delete settings.rates[code];
+    if(settings.display===code) settings.display = "USD";
+    if(catalogEdit && catalogEdit.original===code) catalogEdit = null;
+    syncCatalog(); saveSettings(); renderSettingsPanel(); toast(code+" removed");
+  };
+  if(n) askConfirm("Remove "+code+"?", n+" compan"+(n===1?"y uses":"ies use")+" "+code+". They keep that currency on their records, but it leaves the menus.", "Remove", go);
+  else go();
+}
+async function saveExchangeForm(f){
+  const editing = catalogEdit && catalogEdit.kind==="exchange" ? exchangeList().find(x => x.mic===catalogEdit.original) : null;
+  const short = f.elements.short.value.trim();
+  const name = f.elements.name.value.trim();
+  const country = f.elements.country.value;
+  const currency = f.elements.currency.value;
+  let mic = f.elements.mic.value.trim().toUpperCase();
+  if(!short){ catalogError("Enter a short name, like KRX."); f.elements.short.focus(); return; }
+  if(!name){ catalogError("Enter the full exchange name."); f.elements.name.focus(); return; }
+  if(!COUNTRIES[country]){ catalogError("Choose a country."); f.elements.country.focus(); return; }
+  if(!CURRENCIES[currency]){ catalogError("Choose a trading currency."); f.elements.currency.focus(); return; }
+  if(!mic) mic = editing && isAutoMic(editing.mic) ? editing.mic : newMic();
+  else if(!/^[A-Z0-9]{4,16}$/.test(mic)){ catalogError("Use 4–16 letters or digits for the market code, or leave it blank."); f.elements.mic.focus(); return; }
+  if(exchangeList().some(x => x.short.toLowerCase()===short.toLowerCase() && (!editing || x.mic!==editing.mic))){ catalogError("There’s already an exchange called "+short+"."); f.elements.short.focus(); return; }
+  if(exchangeList().some(x => x.mic===mic && (!editing || x.mic!==editing.mic))){ catalogError("That market code is already used."); f.elements.mic.focus(); return; }
+  const next = {mic, short, name, country, currency};
+  const changed = editing ? relinkExchange(editing.mic, next) : [];
+  const list = ensureExchangeList();
+  if(editing){
+    const i = list.findIndex(x => x.mic===editing.mic);
+    if(i<0){ catalogError("That exchange is no longer in the list."); return; }
+    list[i] = next;
+  } else list.push(next);
+  syncCatalog();
+  await persistCompanies(changed);
+  catalogEdit = null;
+  await saveSettings();
+  renderSettingsPanel();
+  toast(editing ? short+" saved" : short+" added");
+}
+function deleteExchange(mic){
+  const x = EXCHANGE_BY_MIC[mic]; if(!x) return;
+  const n = companiesOnExchange(mic).length;
+  askConfirm("Remove "+x.short+"?", n ? n+" compan"+(n===1?"y uses":"ies use")+" this exchange. They keep the name, but it leaves the menu." : x.short+" will leave the exchange menu.", "Remove", () => {
+    settings.exchanges = ensureExchangeList().filter(e => e.mic!==mic);
+    if(catalogEdit && catalogEdit.original===mic) catalogEdit = null;
+    syncCatalog(); saveSettings(); renderSettingsPanel(); toast(x.short+" removed");
+  });
+}
+function resetCatalog(kind){
+  const customized = kind==="exchanges" ? Array.isArray(settings.exchanges) : Array.isArray(settings.currencies);
+  if(!customized){ toast("Already using the built-in list."); return; }
+  askConfirm(kind==="exchanges" ? "Reset exchanges?" : "Reset currencies?", "This puts the original list back. Companies you already added stay as they are.", "Reset", () => {
+    if(kind==="exchanges") settings.exchanges = null;
+    else { settings.currencies = null; settings.rates = Object.assign({}, DEFAULT_RATES, settings.rates); }
+    catalogEdit = null; syncCatalog();
+    if(!CURRENCIES[settings.display]) settings.display = "USD";
+    saveSettings(); renderSettingsPanel(); toast("Built-in list restored");
+  });
+}
+$("#settingsBtn").addEventListener("click", openSettings);
+$("#settingsTabs").addEventListener("click", e => {
+  const tab = e.target.closest("[data-settings-tab]"); if(!tab) return;
+  settingsTab = tab.dataset.settingsTab; catalogEdit = null; renderSettingsPanel();
+});
+$("#settingsPanel").addEventListener("click", e => {
+  const editC = e.target.closest("[data-edit-cur]");
+  if(editC){ catalogEdit = {kind:"currency", original:editC.dataset.editCur}; renderSettingsPanel(); return; }
+  const editX = e.target.closest("[data-edit-ex]");
+  if(editX){ catalogEdit = {kind:"exchange", original:editX.dataset.editEx}; renderSettingsPanel(); return; }
+  const delC = e.target.closest("[data-del-cur]");
+  if(delC){ deleteCurrency(delC.dataset.delCur); return; }
+  const delX = e.target.closest("[data-del-ex]");
+  if(delX){ deleteExchange(delX.dataset.delEx); return; }
+  if(e.target.closest("[data-catalog-cancel]")){ catalogEdit = null; renderSettingsPanel(); return; }
+  const reset = e.target.closest("[data-catalog-reset]");
+  if(reset) resetCatalog(reset.dataset.catalogReset);
+});
+$("#settingsPanel").addEventListener("submit", e => {
+  const form = e.target.closest("#catalogForm"); if(!form) return;
+  e.preventDefault();
+  if(settingsTab==="exchanges") saveExchangeForm(form); else saveCurrencyForm(form);
+});
 
 init();
 })();
