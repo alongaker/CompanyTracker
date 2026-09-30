@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Company tracker</title>
+<style>
+:root{
+  --bg:#E4E7ED; --panel:#F4F5F7; --panel-2:#E9ECF1; --border:#D9DDE4; --hover:#E9ECF1;
+  --text:#131722; --strong:#000000; --muted:#6A6D78; --accent:#2962FF; --accent-hover:#1E53E5;
+  --up:#089981; --down:#F23645; --grid:#E6E8ED; --axis-label:#131722; --axis-label-text:#FFFFFF;
+  --select:#E3EFFD; --shadow:0 8px 32px rgba(19,23,34,.18);
+  --font:-apple-system,BlinkMacSystemFont,"Trebuchet MS",Roboto,Ubuntu,"Segoe UI",sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.num{font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--muted)}
+
+.app{height:100%;display:grid;grid-template-rows:auto auto minmax(0,1fr);grid-template-columns:minmax(0,1fr)}
+.topbar{min-height:48px}
+.topbar{display:flex;align-items:center;gap:12px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--strong);white-space:nowrap}
+.brand svg{flex:none}
+.search{position:relative;flex:0 1 280px;margin-left:8px}
+.search input{width:100%;height:32px;padding:0 10px 0 32px;border:1px solid transparent;border-radius:6px;background:var(--panel-2)}
+.search input:focus{border-color:var(--accent);outline:none}
+.search svg{position:absolute;left:9px;top:8px;color:var(--muted);pointer-events:none}
+.spacer{flex:1}
+.btn{height:32px;padding:0 14px;border-radius:6px;border:1px solid var(--border);background:var(--panel);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--hover)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn-ghost:hover{color:var(--text)}
+.btn-danger:hover{color:var(--down)}
+.icon-btn{width:28px;height:28px;padding:0;justify-content:center;border:0;background:transparent;color:var(--muted);border-radius:4px;display:inline-flex;align-items:center}
+.icon-btn:hover{background:var(--hover);color:var(--text)}
+
+.layout{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:4px}
+.pane{background:var(--panel);min-height:0;overflow:auto}
+.main-pane{display:flex;flex-direction:column}
+
+/* symbol header */
+.head{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-start;padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+.head-id{min-width:0;flex:1 1 280px}
+.head-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.logo-chip{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;flex:none}
+.head h1{margin:0;font-size:20px;font-weight:600;color:var(--strong);line-height:1.2}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:4px;padding:1px 7px}
+.chip.example{color:var(--accent)}
+.quote{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:10px}
+.quote .px{font-size:32px;font-weight:600;color:var(--strong);letter-spacing:-.01em}
+.quote .cur{font-size:13px;color:var(--muted)}
+.quote .chg{font-size:17px;font-weight:500}
+.asof{font-size:12px;color:var(--muted);margin-top:2px}
+.head-actions{display:flex;gap:4px}
+
+/* chart */
+.chart-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.ranges{display:flex;gap:2px}
+.ranges button{height:28px;padding:0 9px;border:0;border-radius:4px;background:transparent;color:var(--muted);font-size:13px}
+.ranges button:hover{background:var(--hover);color:var(--text)}
+.ranges button[aria-pressed="true"]{color:var(--accent);background:var(--select)}
+.chart-wrap{position:relative;height:clamp(300px,52vh,560px);flex:none}
+.chart-wrap canvas{display:block;touch-action:none}
+.legend{position:absolute;left:12px;top:8px;font-size:12px;display:flex;gap:12px;flex-wrap:wrap;pointer-events:none;color:var(--muted)}
+.legend b{font-weight:500;color:var(--text)}
+.chart-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:24px}
+.chart-empty[hidden]{display:none}
+
+/* lower panels */
+.lower{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));border-top:1px solid var(--border)}
+.block{padding:16px 20px;border-right:1px solid var(--border);min-width:0}
+.block:last-child{border-right:0}
+.block h2{font-size:15px;font-weight:600;color:var(--strong);margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.stats{margin:0;display:grid;grid-template-columns:1fr auto;row-gap:7px;column-gap:16px}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;text-align:right;color:var(--text)}
+.stats a{color:var(--accent);text-decoration:none}
+.stats a:hover{text-decoration:underline}
+.notes{white-space:pre-wrap;color:var(--text);margin:0}
+.notes.empty{color:var(--muted)}
+.log{width:100%;border-collapse:collapse;font-size:13px}
+.log th{font-weight:400;color:var(--muted);text-align:right;padding:4px 0}
+.log th:first-child,.log td:first-child{text-align:left}
+.log td{padding:4px 0;text-align:right;border-top:1px solid var(--border)}
+.log td:last-child{width:32px}
+.log-wrap{max-height:260px;overflow:auto}
+
+/* watchlist */
+.watch{display:flex;flex-direction:column}
+.watch-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px 6px 16px;position:sticky;top:0;background:var(--panel);z-index:1}
+.watch-head h2{margin:0;font-size:15px;font-weight:600;color:var(--strong)}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 104px 92px 58px;gap:8px;padding:4px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);position:sticky;top:44px;background:var(--panel);z-index:1}
+.cols span:not(:first-child){text-align:right}
+.rows{list-style:none;margin:0;padding:0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 104px 92px 58px;gap:8px;align-items:center;width:100%;padding:7px 16px;border:0;border-left:3px solid transparent;background:transparent;text-align:left;font-size:13px}
+.row:hover{background:var(--hover)}
+.row[aria-current="true"]{background:var(--select);border-left-color:var(--accent)}
+.row .sym{display:flex;align-items:center;gap:8px;min-width:0}
+.row .dot{width:20px;height:20px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700}
+.row .t{font-weight:600;color:var(--strong);display:block}
+.row .n{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .v{text-align:right}
+.watch-empty{padding:24px 16px;color:var(--muted);font-size:13px}
+
+/* empty main */
+.welcome{margin:auto;max-width:420px;padding:48px 24px;text-align:center}
+.welcome h1{font-size:22px;color:var(--strong);margin:16px 0 8px;font-weight:600}
+.welcome p{color:var(--muted);margin:0 0 20px}
+.welcome .actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
+/* dialogs */
+dialog{border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);padding:0;width:min(520px,calc(100vw - 24px));box-shadow:var(--shadow);max-height:calc(100dvh - 48px)}
+dialog::backdrop{background:rgba(10,12,18,.55)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border)}
+.dlg-head h2{margin:0;font-size:17px;font-weight:600;color:var(--strong)}
+.dlg-body{padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px;overflow:auto}
+.dlg-body .full{grid-column:1/-1}
+.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.field input,.field textarea{width:100%;height:34px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:#FFFFFF}
+.field textarea{height:auto;min-height:84px;padding:8px 10px;resize:vertical}
+.field input:focus,.field textarea:focus{border-color:var(--accent);outline:none}
+.field .hint{font-size:11px;color:var(--muted);margin-top:3px}
+.dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--border)}
+.err{grid-column:1/-1;color:var(--down);font-size:13px;min-height:0}
+.err:empty{display:none}
+
+.cur-select{height:32px;padding:0 28px 0 10px;border:1px solid var(--border);border-radius:6px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%236A6D78' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;appearance:none;-webkit-appearance:none;font-weight:600}
+.cur-select:hover{background-color:var(--hover)}
+.field select{width:100%;height:34px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:#FFFFFF}
+.native{font-size:13px;color:var(--muted);margin-top:2px}
+.eq{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.code{font-size:11px;color:var(--muted);margin-left:3px}
+.eq-label{font-size:13px;color:var(--muted);white-space:nowrap}
+@media (max-width:860px){.eq-label{display:none}}
+.rates{width:100%;border-collapse:collapse;font-size:13px}
+.rates th{font-weight:400;color:var(--muted);text-align:left;padding:4px 0}
+.rates td{padding:5px 0;border-top:1px solid var(--border)}
+.rates td:last-child{width:130px}
+.rates input{width:100%;height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:#fff;text-align:right}
+.rates input:disabled{background:var(--panel-2);color:var(--muted)}
+/* view bar */
+.viewbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tabs{display:flex;gap:2px;overflow-x:auto;min-width:0;flex:1 1 auto;scrollbar-width:thin}
+.tab{height:30px;padding:0 12px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:13px;font-weight:500;white-space:nowrap}
+.tab:hover{background:var(--hover);color:var(--text)}
+.tab[aria-pressed="true"]{background:var(--select);color:var(--accent)}
+.tab-sep{width:1px;background:var(--border);margin:5px 6px;flex:none}
+.tab-new{color:var(--accent)}
+.view-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.view-tools label{font-size:13px;color:var(--muted)}
+.view-tools select{height:30px;padding:0 8px;border:1px solid var(--border);border-radius:6px;background:var(--panel)}
+.view-tools .btn{height:30px;padding:0 10px;font-size:13px}
+
+/* board */
+.board{overflow:auto;padding:16px 16px 40px;display:flex;flex-direction:column;gap:22px;min-height:0}
+.row-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.row-toggle{display:inline-flex;align-items:center;gap:8px;border:0;background:transparent;padding:2px 4px 2px 0;border-radius:4px}
+.row-toggle svg{color:var(--muted);transition:transform .15s}
+.row-sec.collapsed .row-toggle svg{transform:rotate(-90deg)}
+.row-title{font-size:16px;font-weight:600;color:var(--strong)}
+.row-title .flag{margin-right:6px}
+.row-count{font-size:12px;color:var(--muted);background:var(--panel-2);border-radius:10px;padding:0 8px;line-height:20px}
+.row-sub{font-size:12px;color:var(--muted)}
+.row-tools{display:flex;gap:2px;margin-left:auto}
+.row-tools .icon-btn:disabled{opacity:.35;cursor:default;background:transparent}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:10px;border-radius:10px}
+.cards.droppable{min-height:84px;padding:6px;margin:-6px;border:1px dashed transparent}
+.cards.drop-target{border-color:var(--accent);background:var(--select)}
+.row-empty{grid-column:1/-1;display:grid;place-items:center;min-height:72px;color:var(--muted);font-size:13px;border:1px dashed var(--border);border-radius:8px}
+.board-note{color:var(--muted);font-size:13px;margin:0}
+
+.card{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:8px;transition:border-color .12s, box-shadow .12s}
+.card:hover{border-color:#B8BCC6;box-shadow:0 2px 8px rgba(19,23,34,.06)}
+.card[draggable="true"]{cursor:grab}
+.card.dragging{opacity:.35}
+.card.drop-before::before,.card.drop-after::after{content:"";position:absolute;top:8px;bottom:8px;width:3px;border-radius:2px;background:var(--accent)}
+.card.drop-before::before{left:-7px}
+.card.drop-after::after{right:-7px}
+.card-open{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:none;border:0;padding:12px 14px 12px;border-radius:8px;color:inherit;cursor:inherit}
+.card-move{position:absolute;top:8px;right:6px}
+.c-top{display:flex;align-items:center;gap:8px}
+.c-top.has-move{padding-right:28px}
+.c-badge{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;flex:none}
+.c-ticker{font-size:15px;font-weight:700;color:var(--strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-chg{margin-left:auto;font-size:12px;font-weight:600;padding:1px 6px;border-radius:4px;background:var(--panel-2);white-space:nowrap}
+.c-name{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:6px}
+.c-meta{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-meta .flag{margin-right:5px}
+.spark{display:block;width:100%;height:36px;margin:8px 0 6px}
+.spark-empty{display:grid;place-items:center;height:36px;margin:8px 0 6px;font-size:11px;color:var(--muted);background:var(--panel-2);border-radius:4px}
+.c-vals{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-top:10px;margin-top:10px;border-top:1px solid var(--border)}
+.c-vals>span{min-width:0}
+.c-lab{display:block;font-size:11px;color:var(--muted)}
+.c-val{display:block;font-size:14px;font-weight:600;color:var(--strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* detail dialog */
+.detail-dlg{width:min(1120px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto}
+.detail-dlg .chart-wrap{height:clamp(260px,44vh,460px)}
+.move-list{display:flex;flex-direction:column;gap:6px}
+.move-list button{justify-content:flex-start;height:38px}
+.move-list button[aria-current="true"]{border-color:var(--accent);color:var(--accent)}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--axis-label);color:var(--axis-label-text);padding:9px 14px;border-radius:6px;font-size:13px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+@media (max-width:860px){
+  html,body{height:auto}
+  .topbar{flex-wrap:wrap;padding:8px 12px;row-gap:8px}
+  .topbar .spacer{display:none}
+  .search{order:5;flex:1 1 100%}
+  .cur-select{flex:1 1 0;min-width:0;max-width:none}
+  .viewbar{padding:8px 12px}
+  .add-text{display:none}
+  #addBtn{width:36px;padding:0;justify-content:center}
+  .board{overflow:visible;padding:12px 12px 32px}
+  .cards{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .c-vals{grid-template-columns:1fr}
+  .app{height:auto;min-height:100%}
+  .layout{grid-template-columns:1fr}
+  .watch{order:-1;max-height:280px}
+  .pane{overflow:visible}
+  .watch{overflow:auto}
+  .brand span{display:none}
+  .search{margin-left:0}
+  .chart-wrap{height:clamp(260px,46vh,420px)}
+  .block{border-right:0;border-bottom:1px solid var(--border)}
+  .dlg-body{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        <rect width="26" height="26" rx="6" fill="var(--accent)"/>
+        <path d="M7 8v10M13 6v14M19 10v8" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="5.5" y="10" width="3" height="5" rx=".5" fill="#fff"/>
+        <rect x="11.5" y="9" width="3" height="7" rx=".5" fill="#fff"/>
+        <rect x="17.5" y="12" width="3" height="4" rx=".5" fill="#fff"/>
+      </svg>
+      <span>Company tracker</span>
+    </div>
+    <label class="search">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input id="search" type="search" placeholder="Search your list" aria-label="Search companies" autocomplete="off">
+    </label>
+    <div class="spacer"></div>
+    <label class="eq-label" for="displayCur">Equivalent in</label>
+    <select id="displayCur" class="cur-select num"></select>
+    <button class="btn" id="ratesBtn" type="button">Rates</button>
+    <button class="btn btn-primary" id="addBtn" type="button" aria-label="Add company">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span class="add-text">Add company</span>
+    </button>
+  </header>
+
+  <nav class="viewbar" id="viewbar" aria-label="Board views">
+    <div class="tabs" id="tabs"></div>
+    <div class="view-tools" id="viewTools"></div>
+  </nav>
+  <main class="board" id="board"></main>
+</div>
+
+<!-- Company dialog -->
+<dialog id="companyDlg" aria-labelledby="companyDlgTitle">
+  <form id="companyForm" novalidate>
+    <div class="dlg-head"><h2 id="companyDlgTitle">Add company</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <div class="field"><label for="f-ticker">Ticker</label><input id="f-ticker" name="ticker" maxlength="10" required placeholder="e.g. ACME" autocomplete="off"></div>
+      <div class="field"><label for="f-price" id="priceLabel">Current price</label><input id="f-price" name="price" type="number" step="any" min="0" inputmode="decimal" placeholder="0.00"><div class="hint" id="priceHint">Logged under today's date</div></div>
+      <div class="field full"><label for="f-name">Company name</label><input id="f-name" name="name" maxlength="80" required placeholder="Acme Corporation"></div>
+      <div class="field"><label for="f-exchange">Exchange</label><select id="f-exchange" name="exchangeMic"></select></div>
+      <div class="field" id="otherExField" hidden><label for="f-exother">Exchange name</label><input id="f-exother" name="exchangeOther" maxlength="40" placeholder="e.g. Korea Exchange"></div>
+      <div class="field"><label for="f-country">Country</label><select id="f-country" name="country"></select></div>
+      <div class="field"><label for="f-sector">Sector</label><input id="f-sector" name="sector" maxlength="40" placeholder="Technology"></div>
+      <div class="field"><label for="f-currency">Trading currency</label><select id="f-currency" name="currency"></select></div>
+      <div class="field"><label for="f-mcap">Market cap (trading currency)</label><input id="f-mcap" name="marketCap" maxlength="20" placeholder="1.2T or 850B"></div>
+      <div class="field"><label for="f-pe">P/E ratio</label><input id="f-pe" name="pe" type="number" step="any" inputmode="decimal"></div>
+      <div class="field"><label for="f-div">Dividend yield (%)</label><input id="f-div" name="divYield" type="number" step="any" min="0" inputmode="decimal"></div>
+      <div class="field full"><label for="f-web">Website</label><input id="f-web" name="website" maxlength="200" placeholder="example.com"></div>
+      <div class="field full"><label for="f-notes">Notes</label><textarea id="f-notes" name="notes" maxlength="4000" placeholder="Thesis, catalysts, things to watch…"></textarea></div>
+      <p class="err" id="companyErr" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="companySubmit">Add company</button></div>
+  </form>
+</dialog>
+
+<!-- Rates dialog -->
+<dialog id="ratesDlg" aria-labelledby="ratesTitle" style="width:min(460px,calc(100vw - 24px))">
+  <form id="ratesForm" novalidate>
+    <div class="dlg-head"><h2 id="ratesTitle">Exchange rates</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body" style="grid-template-columns:1fr">
+      <p style="margin:0;color:var(--muted);font-size:13px">How much of each currency 1 US dollar buys. Update these whenever you like; every price on the page converts using them.</p>
+      <table class="rates num"><thead><tr><th scope="col">Currency</th><th scope="col">Per 1 USD</th></tr></thead><tbody id="ratesBody"></tbody></table>
+      <div class="field"><label for="r-asof">Rates as of</label><input id="r-asof" name="asOf" type="date"></div>
+      <p class="err" id="ratesErr" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Save rates</button></div>
+  </form>
+</dialog>
+
+<!-- Price dialog -->
+<dialog id="priceDlg" aria-labelledby="priceDlgTitle" style="width:min(380px,calc(100vw - 24px))">
+  <form id="priceForm" novalidate>
+    <div class="dlg-head"><h2 id="priceDlgTitle">Log a price</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <div class="field"><label for="p-date">Date</label><input id="p-date" name="date" type="date" required></div>
+      <div class="field"><label for="p-price">Price</label><input id="p-price" name="price" type="number" step="any" min="0" inputmode="decimal" required></div>
+      <p class="field full hint" style="margin:0;font-size:12px;color:var(--muted)">Logging a date that already has a price replaces it.</p>
+      <p class="err" id="priceErr" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary">Log price</button></div>
+  </form>
+</dialog>
+
+<!-- Company detail -->
+<dialog id="detailDlg" class="detail-dlg" aria-label="Company details"><div id="main" class="main-pane"></div></dialog>
+
+<!-- Move card dialog -->
+<dialog id="moveDlg" aria-labelledby="moveTitle" style="width:min(360px,calc(100vw - 24px))">
+  <div class="dlg-head"><h2 id="moveTitle">Move to row</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+  <div class="dlg-body" style="grid-template-columns:1fr"><div class="move-list" id="moveList"></div></div>
+</dialog>
+
+<!-- Name dialog (rows and views) -->
+<dialog id="textDlg" aria-labelledby="textTitle" style="width:min(380px,calc(100vw - 24px))">
+  <form id="textForm" novalidate>
+    <div class="dlg-head"><h2 id="textTitle">Name</h2><button type="button" class="icon-btn" data-close aria-label="Close">✕</button></div>
+    <div class="dlg-body" style="grid-template-columns:1fr">
+      <div class="field"><label for="textInput" id="textLabel">Name</label><input id="textInput" maxlength="40" autocomplete="off"></div>
+      <p class="err" id="textErr" role="alert"></p>
+    </div>
+    <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn btn-primary" id="textOk">Save</button></div>
+  </form>
+</dialog>
+
+<!-- Confirm dialog -->
+<dialog id="confirmDlg" aria-labelledby="confirmTitle" style="width:min(380px,calc(100vw - 24px))">
+  <div class="dlg-head"><h2 id="confirmTitle">Delete company?</h2></div>
+  <div class="dlg-body" style="grid-template-columns:1fr"><p id="confirmMsg" style="margin:0"></p></div>
+  <div class="dlg-foot"><button type="button" class="btn" data-close>Cancel</button><button type="button" class="btn btn-primary" id="confirmOk" style="background:var(--down);border-color:var(--down)">Delete</button></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const LS_KEY = "company-tracker:v1";
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const RANGES = [["1M",30],["3M",91],["6M",182],["YTD","ytd"],["1Y",365],["5Y",1826],["All",0]];
+
+let companies = {};
+let selectedId = null;
+let range = "1Y";
+let mode = "loading"; // loading | db | local
+let db = null, uid = null;
+let editingId = null;
+let hover = null;
+let chart = null;
+let query = "";
+const CURRENCIES = {
+  USD:{name:"US dollar", sym:"$"}, EUR:{name:"Euro", sym:"€"}, JPY:{name:"Japanese yen", sym:"¥"},
+  GBP:{name:"British pound", sym:"£"}, CNY:{name:"Chinese yuan", sym:"CN¥"}, AUD:{name:"Australian dollar", sym:"A$"},
+  CAD:{name:"Canadian dollar", sym:"C$"}, CHF:{name:"Swiss franc", sym:"CHF"},
+  MXN:{name:"Mexican peso", sym:"MX$"}, NGN:{name:"Nigerian naira", sym:"₦"}, HKD:{name:"Hong Kong dollar", sym:"HK$"}
+};
+// Units of each currency per 1 USD, from ECB reference rates on 2026-09-28
+const DEFAULT_RATES = {USD:1, EUR:0.8789, JPY:156.88, GBP:0.7540, CNY:6.7105, AUD:1.4237, CAD:1.4166, CHF:0.8318, MXN:17.87, NGN:1331.33, HKD:7.84};
+// MXN: market rate on 2026-09-29; NGN: CBN official (NFEM) rate on 2026-09-28; HKD: pegged band, ~7.84 in Sep 2026
+
+// Exchanges keyed by ISO 10383 MIC code, the identifier market-data APIs use.
+// currency = the exchange's usual trading currency (auto-fills the form).
+const EXCHANGES = [
+  {mic:"XNYS", short:"NYSE",       name:"New York Stock Exchange",      country:"US", currency:"USD"},
+  {mic:"XNAS", short:"Nasdaq",     name:"Nasdaq",                       country:"US", currency:"USD"},
+  {mic:"XTSE", short:"TSX",        name:"Toronto Stock Exchange",       country:"CA", currency:"CAD"},
+  {mic:"XMEX", short:"BMV",        name:"Bolsa Mexicana de Valores",    country:"MX", currency:"MXN"},
+  {mic:"XLON", short:"LSE",        name:"London Stock Exchange",        country:"GB", currency:"GBP"},
+  {mic:"XPAR", short:"Euronext Paris",     name:"Euronext Paris",       country:"FR", currency:"EUR"},
+  {mic:"XAMS", short:"Euronext Amsterdam", name:"Euronext Amsterdam",   country:"NL", currency:"EUR"},
+  {mic:"XETR", short:"Xetra",      name:"Deutsche Börse Xetra (Frankfurt)", country:"DE", currency:"EUR"},
+  {mic:"XSWX", short:"SIX",        name:"SIX Swiss Exchange",           country:"CH", currency:"CHF"},
+  {mic:"XNSA", short:"NGX",        name:"Nigerian Exchange",            country:"NG", currency:"NGN"},
+  {mic:"XTKS", short:"TSE",        name:"Tokyo Stock Exchange",         country:"JP", currency:"JPY"},
+  {mic:"XSHG", short:"SSE",        name:"Shanghai Stock Exchange",      country:"CN", currency:"CNY"},
+  {mic:"XSHE", short:"SZSE",       name:"Shenzhen Stock Exchange",      country:"CN", currency:"CNY"},
+  {mic:"XHKG", short:"HKEX",       name:"Hong Kong Stock Exchange",     country:"HK", currency:"HKD"},
+  {mic:"XASX", short:"ASX",        name:"Australian Securities Exchange", country:"AU", currency:"AUD"}
+];
+const EXCHANGE_BY_MIC = Object.fromEntries(EXCHANGES.map(x=>[x.mic,x]));
+// Match older free-text entries ("NASDAQ", "nyse", "London Stock Exchange") to a listed exchange.
+function matchExchange(text){
+  const t = String(text||"").trim().toLowerCase(); if(!t) return null;
+  return EXCHANGES.find(x => [x.mic, x.short, x.name].some(v => v.toLowerCase()===t)) || null;
+}
+function exchangeOf(c){ return (c.exchangeMic && EXCHANGE_BY_MIC[c.exchangeMic]) || matchExchange(c.exchange); }
+const SETTINGS_KEY = "company-tracker:settings:v1";
+let settings = {display:"USD", rates:Object.assign({}, DEFAULT_RATES), ratesAsOf:"2026-09-28"};
+function rateOf(code){ const r = settings.rates[code]; return (code==="USD") ? 1 : (r>0 ? r : null); }
+function nativeCur(c){ return c.currency || "USD"; }
+function eqCur(){ return CURRENCIES[settings.display] ? settings.display : "USD"; }
+// multiplier from a company's own currency to the equivalent currency (null if no rate)
+function eqK(c){ const rf = rateOf(nativeCur(c)), rt = rateOf(eqCur()); return (rf && rt) ? rt/rf : null; }
+function needsEq(c){ return nativeCur(c) !== eqCur(); }
+function eqLine(c, v, cap){ // small "equivalent" text, or "" when not needed
+  if(v==null || !needsEq(c)) return "";
+  const k = eqK(c); if(k==null) return "";
+  return (cap ? fmtCap(v*k) : fmt(v*k))+" "+eqCur();
+}
+function viewCur(c){ return nativeCur(c); }
+// multiplier from a company's own currency to the chosen display currency
+function factor(c){
+  const from = nativeCur(c), to = viewCur(c);
+  if(from===to) return 1;
+  const rf = rateOf(from), rt = rateOf(to);
+  return (rf && rt) ? rt/rf : null;
+}
+function shownCur(c){ return factor(c)==null ? nativeCur(c) : viewCur(c); }
+function conv(c, v){ if(v==null) return null; const k = factor(c); return k==null ? v : v*k; }
+function parseCap(str){
+  const m = String(str||"").replace(/,/g,"").match(/^\s*[^\d.]*([\d.]+)\s*([KMBT])?/i); if(!m) return null;
+  const n = parseFloat(m[1]); if(!isFinite(n)) return null;
+  return n * ({K:1e3,M:1e6,B:1e9,T:1e12}[(m[2]||"").toUpperCase()] || 1);
+}
+function fmtCap(v){
+  if(v==null) return "—";
+  const u = [[1e12,"T"],[1e9,"B"],[1e6,"M"],[1e3,"K"]].find(x=>Math.abs(v)>=x[0]);
+  return u ? fmt(v/u[0], 2)+u[1] : fmt(v, 0);
+}
+function currencyOptions(sel, includeNative){
+  const opts = Object.keys(CURRENCIES).map(k=>'<option value="'+k+'"'+(k===sel?" selected":"")+'>'+k+' – '+CURRENCIES[k].name+'</option>');
+  if(includeNative) opts.push('<option value="NATIVE"'+(sel==="NATIVE"?" selected":"")+'>Own currency</option>');
+  return opts.join("");
+}
+function loadSettingsLocal(){ try{ const raw=localStorage.getItem(SETTINGS_KEY); if(raw) applySettings(JSON.parse(raw)); }catch(e){} }
+function applySettings(d){
+  if(!d) return;
+  settings.display = (d.display && CURRENCIES[d.display]) ? d.display : "USD";
+  settings.rates = Object.assign({}, DEFAULT_RATES, d.rates||{});
+  settings.ratesAsOf = d.ratesAsOf || settings.ratesAsOf;
+  settings.view = typeof d.view==="string" ? d.view : (settings.view || "exchange");
+  settings.sort = d.sort || settings.sort || "cap";
+  settings.dir = d.dir || settings.dir || "desc";
+  settings.collapsed = (d.collapsed && typeof d.collapsed==="object") ? d.collapsed : (settings.collapsed || {});
+}
+async function saveSettings(){
+  render();
+  if(mode==="db"){
+    try{ await db.collection("data/users/"+uid).doc("settings").set(clone(settings)); }catch(e){ toast("Couldn't save settings. Try again."); }
+  } else { try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch(e){} }
+}
+
+/* ---------- helpers ---------- */
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function localISO(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function today(){ return localISO(new Date()); }
+function toTime(iso){ const [y,m,d] = iso.split("-").map(Number); return new Date(y,m-1,d).getTime(); }
+function fmtDate(iso){ const [y,m,d] = iso.split("-").map(Number); return MONTHS[m-1]+" "+d+", "+y; }
+function fmt(n, dp){ if(n==null || !isFinite(n)) return "—"; const a=Math.abs(n); const d = dp ?? (a>=1000?2:a>=1?2:4); return n.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function sign(n){ return n>0?"+":n<0?"−":""; }
+function cls(n){ return n==null?"flat":n>0?"up":n<0?"down":"flat"; }
+function newId(){ return "c"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function num(v){ if(v===""||v==null) return null; const n=parseFloat(v); return isFinite(n)?n:null; }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function hue(str){ let h=0; for(const ch of String(str)) h=(h*31+ch.charCodeAt(0))%360; return h; }
+function badgeColor(t){ return "hsl("+hue(t)+" 55% 45%)"; }
+
+function history(c){ return (c.history||[]).slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0); }
+function quote(c){
+  const h = history(c); const last=h[h.length-1], prev=h[h.length-2];
+  const price = last ? last.price : null;
+  const chg = prev ? last.price - prev.price : null;
+  const pct = prev && prev.price ? chg/prev.price*100 : null;
+  return {price, chg, pct, asOf: last ? last.date : null, h};
+}
+function upsertPoint(c, date, price){
+  c.history = (c.history||[]).filter(p => p.date !== date);
+  c.history.push({date, price});
+  c.history.sort((a,b)=>a.date<b.date?-1:1);
+}
+function rangePoints(c){
+  const h = history(c); if(!h.length) return h;
+  const endT = toTime(h[h.length-1].date);
+  const r = RANGES.find(x=>x[0]===range)[1];
+  if(r===0) return h;
+  let cutoff;
+  if(r==="ytd"){ cutoff = new Date(new Date(endT).getFullYear(),0,1).getTime(); }
+  else cutoff = endT - r*86400000;
+  return h.filter(p => toTime(p.date) >= cutoff);
+}
+
+let toastTimer;
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("show"),2800); }
+
+/* ---------- persistence ---------- */
+function loadLocal(){
+  try{ const raw = localStorage.getItem(LS_KEY); companies = raw ? JSON.parse(raw) : {}; }catch(e){ companies = {}; }
+}
+function persistLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(companies)); }catch(e){ toast("Couldn't save in this browser."); } }
+
+async function saveCompany(c){
+  companies[c.id] = c; render();
+  if(mode==="db"){
+    try{ await db.collection("data/users/"+uid).doc(c.id).set(c); }
+    catch(e){ toast(e && e.code==="invalid_argument" ? "You have view-only access, so changes aren't saved." : "Couldn't save. Try again."); }
+  } else persistLocal();
+}
+async function removeCompany(id){
+  delete companies[id];
+  let touched = false;
+  layout.views.forEach(v => v.rows.forEach(r => { if(r.ids.includes(id)){ r.ids = r.ids.filter(x => x !== id); touched = true; } }));
+  if(touched) saveLayout();
+  if(selectedId===id) selectedId = null;
+  render();
+  if(mode==="db"){
+    try{ await db.collection("data/users/"+uid).doc(id).delete(); }catch(e){ toast("Couldn't delete. Try again."); }
+  } else persistLocal();
+}
+
+async function init(){
+  render();
+  if(!window.claude || typeof window.claude.use!=="function"){ useLocal(); return; }
+  try{
+    const [d, u] = await Promise.all([window.claude.use("db"), window.claude.use("user")]);
+    const id = u ? await u.id() : null;
+    if(d && id){
+      db = d; uid = id;
+      db.collection("data/users/"+uid).onSnapshot(snap => {
+        const next = {};
+        snap.docs.forEach(s => { if(!s.exists) return; if(s.id==="settings") applySettings(clone(s.data())); else if(s.id==="layout") applyLayout(clone(s.data())); else next[s.id] = clone(s.data()); });
+        companies = next; mode = "db"; render();
+      }, err => { if(err && err.code==="revoked") return; toast("Sync paused. Reload to reconnect."); });
+      return;
+    }
+  }catch(e){}
+  useLocal();
+}
+function useLocal(){ mode="local"; loadLocal(); loadSettingsLocal(); loadLayoutLocal(); render(); }
+
+/* ---------- rendering ---------- */
+function sortedCompanies(){
+  return Object.values(companies).sort((a,b)=>String(a.ticker).localeCompare(String(b.ticker)));
+}
+function render(){
+  const ds = $("#displayCur"); ds.innerHTML = currencyOptions(eqCur(), false);
+  if(selectedId && !companies[selectedId]) selectedId = null;
+  renderBoard();
+  renderMain();
+}
+
+/* ---------- board ---------- */
+const COUNTRIES = {US:"United States",CA:"Canada",MX:"Mexico",BR:"Brazil",GB:"United Kingdom",IE:"Ireland",FR:"France",NL:"Netherlands",BE:"Belgium",DE:"Germany",CH:"Switzerland",IT:"Italy",ES:"Spain",SE:"Sweden",DK:"Denmark",NO:"Norway",FI:"Finland",NG:"Nigeria",ZA:"South Africa",KE:"Kenya",EG:"Egypt",SA:"Saudi Arabia",AE:"United Arab Emirates",IL:"Israel",IN:"India",CN:"China",HK:"Hong Kong",TW:"Taiwan",KR:"South Korea",JP:"Japan",SG:"Singapore",AU:"Australia",NZ:"New Zealand"};
+const FIXED_VIEWS = [["exchange","By exchange"],["country","By country"],["sector","By sector"],["size","By size"]];
+const SORTS = [["cap","Market cap (USD)"],["chg","% change"],["name","Name"],["ticker","Ticker"]];
+const SIZE_BUCKETS = [["mega","Mega cap","200B+ USD",200e9],["large","Large cap","10B–200B USD",10e9],["mid","Mid cap","2B–10B USD",2e9],["small","Small cap","300M–2B USD",300e6],["micro","Micro cap","Under 300M USD",0]];
+const LAYOUT_KEY = "company-tracker:layout:v1";
+let layout = {views:[]};
+let dragId = null, dropInfo = null, moveId = null;
+const CHEVRON = '<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const MOVE_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="3" cy="7" r="1.3" fill="currentColor"/><circle cx="7" cy="7" r="1.3" fill="currentColor"/><circle cx="11" cy="7" r="1.3" fill="currentColor"/></svg>';
+
+function flag(cc){ return /^[A-Z]{2}$/.test(cc||"") ? String.fromCodePoint(...[...cc].map(ch => 127397 + ch.charCodeAt(0))) : ""; }
+function countryOf(c){ if(c.country) return c.country; const ex = exchangeOf(c); return ex ? ex.country : ""; }
+function capUSD(c){ const v = parseCap(c.marketCap), r = rateOf(nativeCur(c)); return (v!=null && r) ? v/r : null; }
+function newKey(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function activeView(){
+  const v = settings.view || "exchange";
+  if(v.startsWith("custom:")){
+    const cv = layout.views.find(x => x.id === v.slice(7));
+    if(cv) return {custom:true, view:cv, id:v};
+  }
+  const key = FIXED_VIEWS.some(f => f[0]===v) ? v : "exchange";
+  return {custom:false, key, id:key};
+}
+function matches(c){
+  const q = query.trim().toLowerCase(); if(!q) return true;
+  const ex = exchangeOf(c);
+  return [c.ticker, c.name, c.sector, c.exchange, ex && ex.short, ex && ex.name, COUNTRIES[countryOf(c)]]
+    .some(v => v && String(v).toLowerCase().includes(q));
+}
+function sortVal(c, k){
+  if(k==="cap") return capUSD(c);
+  if(k==="chg") return quote(c).pct;
+  if(k==="name") return String(c.name||"").toLowerCase();
+  return String(c.ticker||"").toLowerCase();
+}
+function sortList(list){
+  const k = settings.sort || "cap", dir = settings.dir==="asc" ? 1 : -1;
+  return list.slice().sort((a,b) => {
+    const va = sortVal(a,k), vb = sortVal(b,k);
+    if(va==null && vb==null) return String(a.ticker).localeCompare(String(b.ticker));
+    if(va==null) return 1; if(vb==null) return -1;
+    const r = typeof va==="string" ? va.localeCompare(vb) : va - vb;
+    return r*dir || String(a.ticker).localeCompare(String(b.ticker));
+  });
+}
+function groupFixed(key, list){
+  const groups = new Map();
+  const add = (k, title, sub, order, c, fl) => {
+    if(!groups.has(k)) groups.set(k, {key:key+"|"+k, title, sub, order, flag:fl||"", items:[]});
+    groups.get(k).items.push(c);
+  };
+  for(const c of list){
+    if(key==="exchange"){
+      const ex = exchangeOf(c);
+      if(ex) add(ex.mic, ex.short, ex.short===ex.name ? "" : ex.name, 0, c, flag(ex.country));
+      else if(c.exchange) add("o:"+c.exchange.toLowerCase(), c.exchange, "Other exchange", 1, c, flag(countryOf(c)));
+      else add("none", "No exchange", "", 2, c);
+    } else if(key==="country"){
+      const cc = countryOf(c);
+      if(cc) add(cc, COUNTRIES[cc] || cc, "", 0, c, flag(cc)); else add("none", "No country", "", 2, c);
+    } else if(key==="sector"){
+      const sct = (c.sector||"").trim();
+      if(sct) add(sct.toLowerCase(), sct, "", 0, c); else add("none", "No sector", "", 2, c);
+    } else if(key==="size"){
+      const v = capUSD(c);
+      if(v==null){ add("none", "Size unknown", "Add a market cap to place it", 99, c); continue; }
+      const i = SIZE_BUCKETS.findIndex(b => v >= b[3]); const b = SIZE_BUCKETS[i];
+      add(b[0], b[1], b[2], i, c);
+    }
+  }
+  const rows = [...groups.values()];
+  rows.sort((a,b) => a.order - b.order || (key==="size" ? 0 : a.title.localeCompare(b.title)));
+  rows.forEach(r => r.items = sortList(r.items));
+  return rows;
+}
+function customRows(v, list){
+  const shown = new Set(list.map(c => c.id)), placed = new Set();
+  const rows = v.rows.map(r => {
+    const ids = r.ids.filter(id => companies[id]);
+    ids.forEach(id => placed.add(id));
+    return {key:"custom|"+v.id+"|"+r.id, rowId:r.id, title:r.name, items:ids.filter(id => shown.has(id)).map(id => companies[id])};
+  });
+  const loose = list.filter(c => !placed.has(c.id)).sort((a,b) => String(a.ticker).localeCompare(String(b.ticker)));
+  rows.push({key:"custom|"+v.id+"|__unsorted", rowId:"__unsorted", title:"Unsorted", sub:"Not in a row yet", unsorted:true, items:loose});
+  return rows;
+}
+
+function renderViewbar(){
+  const av = activeView();
+  $("#tabs").innerHTML =
+    FIXED_VIEWS.map(([k,label]) => '<button class="tab" type="button" data-view="'+k+'" aria-pressed="'+(av.id===k)+'">'+label+'</button>').join("") +
+    '<span class="tab-sep" aria-hidden="true"></span>' +
+    layout.views.map(v => '<button class="tab" type="button" data-view="custom:'+esc(v.id)+'" aria-pressed="'+(av.id==="custom:"+v.id)+'">'+esc(v.name)+'</button>').join("") +
+    '<button class="tab tab-new" type="button" data-view-act="new">+ New view</button>';
+  if(av.custom){
+    $("#viewTools").innerHTML =
+      '<button class="btn" type="button" data-view-act="add-row">+ Add row</button>'+
+      '<button class="btn" type="button" data-view-act="rename">Rename view</button>'+
+      '<button class="btn btn-ghost btn-danger" type="button" data-view-act="delete">Delete view</button>';
+  } else {
+    const k = settings.sort || "cap";
+    $("#viewTools").innerHTML =
+      '<label for="sortSel">Sort cards by</label>'+
+      '<select id="sortSel">'+SORTS.map(([v,l]) => '<option value="'+v+'"'+(v===k?" selected":"")+'>'+l+'</option>').join("")+'</select>'+
+      '<button class="btn" type="button" data-view-act="dir" aria-label="Sort direction: '+(settings.dir==="asc"?"ascending":"descending")+'">'+(settings.dir==="asc" ? "↑ Low to high" : "↓ High to low")+'</button>';
+  }
+}
+
+function sparkSVG(c){
+  const h = history(c).slice(-60);
+  if(h.length < 2) return '<span class="spark-empty">Log 2+ prices to see a trend</span>';
+  const vs = h.map(p => p.price), lo = Math.min(...vs), hi = Math.max(...vs), W = 200, H = 36;
+  const pts = vs.map((v,i) => (i/(vs.length-1)*W).toFixed(1)+","+(H-3-(hi===lo ? .5 : (v-lo)/(hi-lo))*(H-6)).toFixed(1));
+  const col = vs[vs.length-1] >= vs[0] ? "var(--up)" : "var(--down)";
+  return '<svg class="spark" viewBox="0 0 200 36" preserveAspectRatio="none" aria-hidden="true">'+
+    '<polygon points="0,36 '+pts.join(" ")+' 200,36" fill="'+col+'" fill-opacity=".1"/>'+
+    '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+col+'" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>';
+}
+function cardHTML(c, custom){
+  const q = quote(c), ex = exchangeOf(c), cc = countryOf(c), cap = parseCap(c.marketCap), nat = nativeCur(c);
+  const meta = [ex ? ex.short : c.exchange, COUNTRIES[cc]].filter(Boolean).join(" · ") || "No exchange set";
+  const pe = eqLine(c, q.price), ce = cap!=null ? eqLine(c, cap, true) : "";
+  return '<article class="card" data-id="'+esc(c.id)+'"'+(custom ? ' draggable="true"' : '')+'>'+
+    '<button class="card-open" type="button" data-open="'+esc(c.id)+'" aria-label="Open '+esc(c.name)+', '+esc(c.ticker)+'">'+
+      '<span class="c-top'+(custom ? ' has-move' : '')+'">'+
+        '<span class="c-badge" style="background:'+badgeColor(c.ticker)+'">'+esc(String(c.ticker).slice(0,1))+'</span>'+
+        '<span class="c-ticker">'+esc(c.ticker)+'</span>'+
+        (q.pct!=null ? '<span class="c-chg num '+cls(q.pct)+'">'+sign(q.pct)+fmt(Math.abs(q.pct),2)+'%</span>' : '')+
+      '</span>'+
+      '<span class="c-name">'+esc(c.name)+'</span>'+
+      '<span class="c-meta">'+(cc ? '<span class="flag">'+flag(cc)+'</span>' : '')+esc(meta)+'</span>'+
+      '<span class="c-vals">'+
+        '<span><span class="c-lab">Price</span><span class="c-val num">'+fmt(q.price)+'<span class="code">'+esc(nat)+'</span></span>'+(pe ? '<span class="eq num">'+pe+'</span>' : '')+'</span>'+
+        '<span><span class="c-lab">Market cap</span><span class="c-val num">'+(cap!=null ? fmtCap(cap)+'<span class="code">'+esc(nat)+'</span>' : esc(c.marketCap||"—"))+'</span>'+(ce ? '<span class="eq num">'+ce+'</span>' : '')+'</span>'+
+      '</span>'+
+    '</button>'+
+    (custom ? '<button class="card-move icon-btn" type="button" data-move="'+esc(c.id)+'" aria-label="Move '+esc(c.ticker)+' to a row">'+MOVE_ICON+'</button>' : '')+
+  '</article>';
+}
+function rowHTML(r, idx, n, custom){
+  const collapsed = !!(settings.collapsed||{})[r.key];
+  const editable = custom && !r.unsorted;
+  const tools = editable ? '<span class="row-tools">'+
+    '<button class="icon-btn" type="button" data-row-act="rename" data-row-id="'+esc(r.rowId)+'" aria-label="Rename row">✎</button>'+
+    '<button class="icon-btn" type="button" data-row-act="up" data-row-id="'+esc(r.rowId)+'" aria-label="Move row up"'+(idx===0?' disabled':'')+'>↑</button>'+
+    '<button class="icon-btn" type="button" data-row-act="down" data-row-id="'+esc(r.rowId)+'" aria-label="Move row down"'+(idx>=n-2?' disabled':'')+'>↓</button>'+
+    '<button class="icon-btn btn-danger" type="button" data-row-act="delete" data-row-id="'+esc(r.rowId)+'" aria-label="Delete row">✕</button>'+
+  '</span>' : '';
+  return '<section class="row-sec'+(collapsed ? ' collapsed' : '')+'">'+
+    '<div class="row-head">'+
+      '<button class="row-toggle" type="button" data-toggle="'+esc(r.key)+'" aria-expanded="'+!collapsed+'">'+CHEVRON+
+        '<span class="row-title">'+(r.flag ? '<span class="flag">'+r.flag+'</span>' : '')+esc(r.title)+'</span>'+
+        '<span class="row-count num">'+r.items.length+'</span></button>'+
+      (r.sub ? '<span class="row-sub">'+esc(r.sub)+'</span>' : '')+ tools +
+    '</div>'+
+    (collapsed ? '' : '<div class="cards'+(custom ? ' droppable' : '')+'" data-drop="'+esc(r.rowId||"")+'">'+
+      (r.items.length ? r.items.map(c => cardHTML(c, custom)).join("")
+        : '<div class="row-empty">'+(custom ? (r.unsorted ? "Everything is placed in a row" : "Drag companies here") : "No companies")+'</div>')+
+    '</div>')+
+  '</section>';
+}
+function renderBoard(){
+  renderViewbar();
+  const board = $("#board");
+  if(mode==="loading"){ board.innerHTML = '<div class="welcome"><p>Loading…</p></div>'; return; }
+  const all = Object.values(companies);
+  if(!all.length){
+    board.innerHTML =
+      '<div class="welcome">'+
+        '<svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><rect width="56" height="56" rx="12" fill="var(--panel-2)"/><rect x="10" y="12" width="15" height="13" rx="3" fill="var(--accent)" opacity=".85"/><rect x="31" y="12" width="15" height="13" rx="3" fill="var(--up)" opacity=".85"/><rect x="10" y="31" width="15" height="13" rx="3" fill="var(--border)"/><rect x="31" y="31" width="15" height="13" rx="3" fill="var(--border)"/></svg>'+
+        '<h1>Build your company board</h1>'+
+        '<p>Add companies and they appear as cards, grouped by exchange or country. Or make your own views and arrange the cards however you like.</p>'+
+        '<div class="actions"><button class="btn btn-primary" type="button" data-act="add">Add company</button>'+
+        '<button class="btn" type="button" data-act="examples">Load example companies</button></div>'+
+      '</div>';
+    return;
+  }
+  const list = all.filter(matches);
+  const av = activeView();
+  if(!list.length){ board.innerHTML = '<p class="board-note">Nothing matches “'+esc(query)+'”.</p>'; return; }
+  const rows = av.custom ? customRows(av.view, list) : groupFixed(av.key, list);
+  board.innerHTML =
+    (av.custom && !av.view.rows.length ? '<p class="board-note">This view has no rows yet. Use <b>+ Add row</b>, then drag cards into it.</p>' : '') +
+    rows.map((r,i) => rowHTML(r, i, rows.length, av.custom)).join("");
+}
+
+/* layout persistence */
+function loadLayoutLocal(){ try{ const raw = localStorage.getItem(LAYOUT_KEY); if(raw) applyLayout(JSON.parse(raw)); }catch(e){} }
+function applyLayout(d){ layout = (d && Array.isArray(d.views)) ? {views:d.views.map(v => ({id:v.id, name:v.name, rows:(v.rows||[]).map(r => ({id:r.id, name:r.name, ids:Array.isArray(r.ids) ? r.ids.slice() : []}))}))} : {views:[]}; }
+async function saveLayout(){
+  renderBoard();
+  if(mode==="db"){
+    try{ await db.collection("data/users/"+uid).doc("layout").set(clone(layout)); }catch(e){ toast("Couldn't save your layout. Try again."); }
+  } else { try{ localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }catch(e){} }
+}
+function currentCustom(){ const av = activeView(); return av.custom ? av.view : null; }
+function moveCard(id, rowId, beforeId){
+  const v = currentCustom(); if(!v || !companies[id]) return;
+  v.rows.forEach(r => r.ids = r.ids.filter(x => x !== id));
+  if(rowId && rowId !== "__unsorted"){
+    const r = v.rows.find(x => x.id === rowId); if(!r) return;
+    const i = beforeId ? r.ids.indexOf(beforeId) : -1;
+    if(i < 0) r.ids.push(id); else r.ids.splice(i, 0, id);
+  }
+  saveLayout();
+}
+
+/* name + confirm prompts */
+let textCb = null;
+function askText(title, label, value, okLabel, cb){
+  textCb = cb;
+  $("#textTitle").textContent = title; $("#textLabel").textContent = label; $("#textOk").textContent = okLabel;
+  $("#textInput").value = value || ""; $("#textErr").textContent = "";
+  $("#textDlg").showModal(); $("#textInput").focus(); $("#textInput").select();
+}
+$("#textForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = $("#textInput").value.trim();
+  if(!v){ $("#textErr").textContent = "Enter a name."; return; }
+  $("#textDlg").close(); if(textCb) textCb(v); textCb = null;
+});
+let confirmCb = null;
+function askConfirm(title, msg, okLabel, cb){
+  confirmCb = cb;
+  $("#confirmTitle").textContent = title; $("#confirmMsg").textContent = msg; $("#confirmOk").textContent = okLabel;
+  $("#confirmDlg").showModal();
+}
+
+/* board events */
+$("#viewbar").addEventListener("click", e => {
+  const t = e.target.closest("[data-view]");
+  if(t){ settings.view = t.dataset.view; saveSettings(); return; }
+  const a = e.target.closest("[data-view-act]"); if(!a) return;
+  const act = a.dataset.viewAct, v = currentCustom();
+  if(act==="dir"){ settings.dir = settings.dir==="asc" ? "desc" : "asc"; saveSettings(); }
+  else if(act==="new") askText("New view", "View name", "", "Create view", name => {
+    const nv = {id:newKey("v"), name, rows:[{id:newKey("r"), name:"Row 1", ids:[]}]};
+    layout.views.push(nv); settings.view = "custom:"+nv.id; saveLayout(); saveSettings();
+  });
+  else if(act==="add-row" && v) askText("Add row", "Row name", "", "Add row", name => { v.rows.push({id:newKey("r"), name, ids:[]}); saveLayout(); });
+  else if(act==="rename" && v) askText("Rename view", "View name", v.name, "Save", name => { v.name = name; saveLayout(); });
+  else if(act==="delete" && v) askConfirm("Delete view?", "“"+v.name+"” and its rows will be removed. Your companies stay on the board.", "Delete view", () => {
+    layout.views = layout.views.filter(x => x !== v); settings.view = "exchange"; saveLayout(); saveSettings();
+  });
+});
+$("#viewbar").addEventListener("change", e => {
+  if(e.target.id !== "sortSel") return;
+  settings.sort = e.target.value;
+  settings.dir = (settings.sort==="name" || settings.sort==="ticker") ? "asc" : "desc";
+  saveSettings();
+});
+$("#board").addEventListener("click", e => {
+  const tg = e.target.closest("[data-toggle]");
+  if(tg){ settings.collapsed = Object.assign({}, settings.collapsed); const k = tg.dataset.toggle;
+    if(settings.collapsed[k]) delete settings.collapsed[k]; else settings.collapsed[k] = true; saveSettings(); return; }
+  const mv = e.target.closest("[data-move]");
+  if(mv){ openMove(mv.dataset.move); return; }
+  const op = e.target.closest("[data-open]");
+  if(op){ openDetail(op.dataset.open); return; }
+  const ra = e.target.closest("[data-row-act]");
+  if(ra){
+    const v = currentCustom(); if(!v) return;
+    const i = v.rows.findIndex(r => r.id === ra.dataset.rowId); if(i < 0) return;
+    const r = v.rows[i], act = ra.dataset.rowAct;
+    if(act==="rename") askText("Rename row", "Row name", r.name, "Save", name => { r.name = name; saveLayout(); });
+    else if(act==="up" && i > 0){ [v.rows[i-1], v.rows[i]] = [v.rows[i], v.rows[i-1]]; saveLayout(); }
+    else if(act==="down" && i < v.rows.length-1){ [v.rows[i+1], v.rows[i]] = [v.rows[i], v.rows[i+1]]; saveLayout(); }
+    else if(act==="delete") askConfirm("Delete row?", "“"+r.name+"” will be removed. Its companies move to Unsorted.", "Delete row", () => { v.rows.splice(v.rows.indexOf(r), 1); saveLayout(); });
+    return;
+  }
+  const a = e.target.closest("[data-act]"); if(!a) return;
+  if(a.dataset.act==="add") openCompany();
+  else if(a.dataset.act==="examples") loadExamples();
+});
+
+/* drag and drop (custom views) */
+function clearDrop(){ document.querySelectorAll(".drop-target,.drop-before,.drop-after").forEach(x => x.classList.remove("drop-target","drop-before","drop-after")); }
+$("#board").addEventListener("dragstart", e => {
+  const card = e.target.closest('.card[draggable="true"]'); if(!card) return;
+  dragId = card.dataset.id; e.dataTransfer.effectAllowed = "move";
+  try{ e.dataTransfer.setData("text/plain", dragId); }catch(_){}
+  requestAnimationFrame(() => card.classList.add("dragging"));
+});
+$("#board").addEventListener("dragend", () => { dragId = null; dropInfo = null; clearDrop(); document.querySelectorAll(".card.dragging").forEach(x => x.classList.remove("dragging")); });
+$("#board").addEventListener("dragover", e => {
+  if(!dragId) return;
+  const zone = e.target.closest(".cards.droppable"); if(!zone) return;
+  e.preventDefault(); e.dataTransfer.dropEffect = "move";
+  clearDrop(); zone.classList.add("drop-target");
+  const card = e.target.closest(".card"); let beforeId = null;
+  if(card && card.dataset.id === dragId) beforeId = "__self";
+  else if(card){
+    const r = card.getBoundingClientRect();
+    if(e.clientX > r.left + r.width/2){
+      card.classList.add("drop-after");
+      let n = card.nextElementSibling;
+      while(n && (!n.classList.contains("card") || n.dataset.id === dragId)) n = n.nextElementSibling;
+      beforeId = n ? n.dataset.id : null;
+    } else { card.classList.add("drop-before"); beforeId = card.dataset.id; }
+  }
+  dropInfo = {rowId: zone.dataset.drop, beforeId};
+});
+$("#board").addEventListener("dragleave", e => { if(!e.relatedTarget || !$("#board").contains(e.relatedTarget)) clearDrop(); });
+$("#board").addEventListener("drop", e => {
+  if(!dragId || !dropInfo) return;
+  e.preventDefault();
+  const id = dragId, {rowId, beforeId} = dropInfo;
+  dragId = null; dropInfo = null; clearDrop();
+  if(beforeId !== "__self") moveCard(id, rowId, beforeId);
+});
+
+/* move dialog (touch + keyboard friendly) */
+function openMove(id){
+  const v = currentCustom(), c = companies[id]; if(!v || !c) return;
+  moveId = id;
+  const cur = (v.rows.find(r => r.ids.includes(id)) || {id:"__unsorted"}).id;
+  $("#moveTitle").textContent = "Move "+c.ticker+" to…";
+  $("#moveList").innerHTML = v.rows.concat([{id:"__unsorted", name:"Unsorted"}]).map(r =>
+    '<button class="btn" type="button" data-move-to="'+esc(r.id)+'" aria-current="'+(r.id===cur)+'">'+esc(r.name)+(r.id===cur ? ' <span style="margin-left:auto;font-size:12px">Current</span>' : '')+'</button>').join("");
+  $("#moveDlg").showModal();
+}
+$("#moveList").addEventListener("click", e => {
+  const b = e.target.closest("[data-move-to]"); if(!b) return;
+  $("#moveDlg").close(); moveCard(moveId, b.dataset.moveTo, null);
+});
+
+/* detail */
+function openDetail(id){
+  if(!companies[id]) return;
+  selectedId = id; hover = null;
+  $("#detailDlg").showModal();
+  renderMain();
+  $("#main").scrollTop = 0;
+}
+$("#detailDlg").addEventListener("close", () => { selectedId = null; chart = null; });
+
+function renderMain(){
+  const main = $("#main");
+  const c = companies[selectedId];
+  if(!$("#detailDlg").open) return;
+  if(!c){ $("#detailDlg").close(); return; }
+  if(false){
+    main.innerHTML =
+      '<div class="welcome">'+
+        '<svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><rect width="56" height="56" rx="12" fill="var(--panel-2)"/><path d="M10 40l10-10 8 6 16-18" fill="none" stroke="var(--up)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+        '<h1>Start your watchlist</h1>'+
+        '<p>Add a company with its price and key stats. Log new prices over time and the chart builds itself.</p>'+
+        '<div class="actions"><button class="btn btn-primary" type="button" data-act="add">Add company</button>'+
+        '<button class="btn" type="button" data-act="examples">Load example companies</button></div>'+
+      '</div>';
+    chart = null; return;
+  }
+  const q = quote(c);
+  const yr = q.h.filter(p => q.asOf && toTime(p.date) >= toTime(q.asOf) - 365*86400000);
+  const hi52 = yr.length ? Math.max(...yr.map(p=>p.price)) : null;
+  const lo52 = yr.length ? Math.min(...yr.map(p=>p.price)) : null;
+  const nat = nativeCur(c), eq = eqCur(), ek = eqK(c);
+  const capV = parseCap(c.marketCap);
+  const web = c.website ? (/^https?:\/\//i.test(c.website) ? c.website : "https://"+c.website) : null;
+  const ex = exchangeOf(c);
+  const ccd = countryOf(c);
+  const chips = [ex ? ex.short : c.exchange, ccd ? (flag(ccd)+' '+(COUNTRIES[ccd]||ccd)) : '', c.sector].filter(Boolean).map(x=>'<span class="chip">'+esc(x)+'</span>').join("") +
+    (c.example ? '<span class="chip example">Example data</span>' : "");
+
+  main.innerHTML =
+    '<section class="head">'+
+      '<div class="head-id">'+
+        '<div class="head-row"><span class="logo-chip" style="background:'+badgeColor(c.ticker)+'">'+esc(String(c.ticker).slice(0,2))+'</span>'+
+        '<div style="min-width:0"><h1>'+esc(c.name)+'</h1><div style="color:var(--muted);font-size:13px">'+esc(c.ticker)+'</div></div></div>'+
+        (chips ? '<div class="chips">'+chips+'</div>' : '')+
+        '<div class="quote"><span class="px num">'+fmt(q.price)+'</span><span class="cur">'+esc(nat)+'</span>'+
+        (q.chg!=null ? '<span class="chg num '+cls(q.chg)+'">'+sign(q.chg)+fmt(Math.abs(q.chg))+' ('+sign(q.pct)+fmt(Math.abs(q.pct),2)+'%)</span>' : '')+
+        '</div>'+
+        (q.price!=null && needsEq(c) && ek!=null ? '<div class="native num">≈ '+fmt(q.price*ek)+' '+esc(eq)+
+          (q.chg!=null ? ' <span class="'+cls(q.chg)+'">('+sign(q.chg)+fmt(Math.abs(q.chg*ek))+')</span>' : '')+
+          ' <span style="font-size:12px">· 1 '+esc(nat)+' = '+fmt(ek, ek<10?4:2)+' '+esc(eq)+'</span></div>' : '')+
+        (needsEq(c) && ek==null ? '<div class="native">No exchange rate for '+esc(nat)+' yet, so there\'s no '+esc(eq)+' equivalent</div>' : '')+
+        '<div class="asof">'+(q.asOf ? "Last price logged "+fmtDate(q.asOf) : "No prices logged yet")+'</div>'+
+      '</div>'+
+      '<div class="head-actions">'+
+        '<button class="btn" type="button" data-act="edit">Edit</button>'+
+        '<button class="btn btn-ghost btn-danger" type="button" data-act="delete">Delete</button>'+
+        '<button class="icon-btn" type="button" data-close aria-label="Close details" style="margin-left:4px">✕</button>'+
+      '</div>'+
+    '</section>'+
+    '<div class="chart-bar">'+
+      '<div class="ranges" role="group" aria-label="Chart range">'+
+        RANGES.map(r=>'<button type="button" data-range="'+r[0]+'" aria-pressed="'+(r[0]===range)+'">'+r[0]+'</button>').join("")+
+      '</div><div class="spacer"></div>'+
+      '<button class="btn" type="button" data-act="price">'+
+        '<svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Log price</button>'+
+    '</div>'+
+    '<div class="chart-wrap" id="chartWrap">'+
+      '<canvas id="chart" role="img" aria-label="Price chart for '+esc(c.ticker)+'"></canvas>'+
+      '<div class="legend num" id="legend"></div>'+
+      '<div class="chart-empty" id="chartEmpty" hidden></div>'+
+    '</div>'+
+    '<div class="lower">'+
+      '<section class="block"><h2>Key stats</h2><dl class="stats num">'+
+        '<dt>Market cap</dt><dd>'+(capV!=null ? fmtCap(capV)+' '+esc(nat)+(eqLine(c,capV,true) ? ' <span style="color:var(--muted)">('+eqLine(c,capV,true)+')</span>' : '') : esc(c.marketCap||"—"))+'</dd>'+
+        '<dt>P/E ratio</dt><dd>'+fmt(c.pe,2)+'</dd>'+
+        '<dt>Dividend yield</dt><dd>'+(c.divYield==null?"—":fmt(c.divYield,2)+"%")+'</dd>'+
+        '<dt>52-week high</dt><dd>'+(hi52==null?"—":fmt(hi52)+' '+esc(nat)+(eqLine(c,hi52)?'<span class="eq">'+eqLine(c,hi52)+'</span>':''))+'</dd>'+
+        '<dt>52-week low</dt><dd>'+(lo52==null?"—":fmt(lo52)+' '+esc(nat)+(eqLine(c,lo52)?'<span class="eq">'+eqLine(c,lo52)+'</span>':''))+'</dd>'+
+        '<dt>Prices logged</dt><dd>'+q.h.length+'</dd>'+
+        '<dt>Website</dt><dd>'+(web?'<a href="'+esc(web)+'" target="_blank" rel="noopener noreferrer">'+esc(c.website.replace(/^https?:\/\//i,"").replace(/\/$/,""))+'</a>':"—")+'</dd>'+
+      '</dl></section>'+
+      '<section class="block"><h2>Notes</h2><p class="notes'+(c.notes?"":" empty")+'">'+(c.notes?esc(c.notes):"No notes yet. Use Edit to add your thesis or things to watch.")+'</p></section>'+
+      '<section class="block"><h2>Price log</h2>'+
+        (q.h.length ? '<div class="log-wrap"><table class="log num"><thead><tr><th scope="col">Date</th><th scope="col">Price ('+esc(nat)+')</th><th scope="col">Chg%</th><th><span class="sr" style="position:absolute;left:-9999px">Remove</span></th></tr></thead><tbody>'+
+          q.h.slice().reverse().slice(0,200).map((p,i,arr)=>{
+            const prev = arr[i+1]; const pct = prev && prev.price ? (p.price-prev.price)/prev.price*100 : null;
+            return '<tr><td>'+fmtDate(p.date)+'</td><td>'+fmt(p.price)+'</td><td class="'+cls(pct)+'">'+(pct==null?"—":sign(pct)+fmt(Math.abs(pct),2)+"%")+'</td>'+
+              '<td><button class="icon-btn" type="button" data-del-date="'+p.date+'" aria-label="Remove price for '+fmtDate(p.date)+'">✕</button></td></tr>';
+          }).join("")+
+        '</tbody></table></div>' : '<p class="notes empty">Log a price to start the history.</p>')+
+      '</section>'+
+    '</div>';
+
+  hover = null;
+  bindChart();
+  draw();
+}
+
+/* ---------- chart ---------- */
+function tok(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function rgba(hex, a){ const h=hex.replace("#",""); const n=parseInt(h.length===3?h.split("").map(x=>x+x).join(""):h,16); return "rgba("+(n>>16&255)+","+(n>>8&255)+","+(n&255)+","+a+")"; }
+function niceStep(span, count){ const raw=span/count; const mag=Math.pow(10,Math.floor(Math.log10(raw))); const n=raw/mag; return (n<1.5?1:n<3?2:n<7?5:10)*mag; }
+function axisDate(t, long){ const d=new Date(t); return long ? MONTHS[d.getMonth()]+" '"+String(d.getFullYear()).slice(2) : MONTHS[d.getMonth()]+" "+d.getDate(); }
+
+function bindChart(){
+  const cv = $("#chart"); if(!cv) return;
+  cv.addEventListener("pointermove", e => {
+    if(!chart) return;
+    const r = cv.getBoundingClientRect(); const mx = e.clientX - r.left, my = e.clientY - r.top;
+    let best=0, bd=Infinity;
+    chart.ts.forEach((t,i)=>{ const d=Math.abs(chart.X(t)-mx); if(d<bd){bd=d;best=i;} });
+    hover = {i:best, y:Math.max(chart.padT, Math.min(chart.padT+chart.ph, my))};
+    draw();
+  });
+  cv.addEventListener("pointerleave", () => { hover=null; draw(); });
+}
+
+function draw(){
+  const cv = $("#chart"), wrap = $("#chartWrap"); if(!cv||!wrap) return;
+  const c = companies[selectedId]; if(!c) return;
+  const W = wrap.clientWidth, H = wrap.clientHeight; if(!W||!H) return;
+  const dpr = window.devicePixelRatio || 1;
+  if(cv.width !== Math.round(W*dpr) || cv.height !== Math.round(H*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); cv.style.width=W+"px"; cv.style.height=H+"px"; }
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,W,H);
+  const kk = 1; const pts = rangePoints(c).map(p=>({date:p.date, price:p.price*kk})), empty = $("#chartEmpty"), legend = $("#legend");
+  if(pts.length < 2){
+    chart = null; legend.innerHTML = "";
+    const total = (c.history||[]).length;
+    empty.innerHTML = total >= 2 ? '<div>Not enough prices in this range.<br>Try a longer range.</div>'
+      : '<div><div style="margin-bottom:12px">Log at least two prices to draw the chart.</div><button class="btn" type="button" data-act="price">Log price</button></div>';
+    empty.hidden = false; return;
+  }
+  empty.hidden = true;
+  const T = { grid:tok("--grid"), muted:tok("--muted"), border:tok("--border"), up:tok("--up"), down:tok("--down"), lab:tok("--axis-label"), labText:tok("--axis-label-text"), panel:tok("--panel"), text:tok("--text") };
+  const font = tok("--font");
+  const padL=0, padR=72, padT=34, padB=28;
+  const pw = W-padL-padR, ph = H-padT-padB;
+  const ts = pts.map(p=>toTime(p.date)), vs = pts.map(p=>p.price);
+  const t0=ts[0], t1=ts[ts.length-1];
+  let lo=Math.min(...vs), hi=Math.max(...vs);
+  const span = (hi-lo) || Math.abs(hi)*0.05 || 1; lo -= span*0.08; hi += span*0.1;
+  const X = t => padL + (t1===t0 ? pw/2 : (t-t0)/(t1-t0)*pw);
+  const Y = v => padT + (hi-v)/(hi-lo)*ph;
+  chart = {ts, pts, X, Y, padT, ph};
+
+  ctx.font = "11px "+font; ctx.textBaseline="middle"; ctx.lineWidth=1;
+  // horizontal grid + price axis
+  const step = niceStep(hi-lo, Math.max(3, Math.round(ph/60)));
+  const dp = step < 0.1 ? 3 : step < 1 ? 2 : step < 10 ? 2 : 0;
+  for(let v=Math.ceil(lo/step)*step; v<=hi; v+=step){
+    const y = Math.round(Y(v))+.5;
+    ctx.strokeStyle=T.grid; ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+pw,y); ctx.stroke();
+    ctx.fillStyle=T.muted; ctx.textAlign="left"; ctx.fillText(fmt(v,dp), padL+pw+8, y);
+  }
+  // vertical grid + date axis
+  const longFmt = (t1-t0) > 200*86400000;
+  const n = Math.max(2, Math.floor(pw/110));
+  ctx.textAlign="center";
+  for(let i=0;i<=n;i++){
+    const t = t0 + (t1-t0)*i/n; const x = Math.round(X(t))+.5;
+    ctx.strokeStyle=T.grid; ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+ph); ctx.stroke();
+    const label = axisDate(t, longFmt); const w = ctx.measureText(label).width;
+    const lx = Math.min(Math.max(x, padL+w/2+4), padL+pw-w/2-4);
+    ctx.fillStyle=T.muted; ctx.fillText(label, lx, padT+ph+padB/2+2);
+  }
+  // axis borders
+  ctx.strokeStyle=T.border; ctx.beginPath();
+  ctx.moveTo(padL+pw+.5,0); ctx.lineTo(padL+pw+.5,H); ctx.moveTo(0,padT+ph+.5); ctx.lineTo(W,padT+ph+.5); ctx.stroke();
+
+  // series
+  const first=vs[0], last=vs[vs.length-1];
+  const col = last >= first ? T.up : T.down;
+  ctx.save(); ctx.beginPath(); ctx.rect(padL,0,pw,padT+ph); ctx.clip();
+  ctx.beginPath(); pts.forEach((p,i)=>{ const x=X(ts[i]), y=Y(p.price); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  const line = new Path2D(); pts.forEach((p,i)=>{ const x=X(ts[i]), y=Y(p.price); i?line.lineTo(x,y):line.moveTo(x,y); });
+  ctx.lineTo(X(t1), padT+ph); ctx.lineTo(X(t0), padT+ph); ctx.closePath();
+  const g = ctx.createLinearGradient(0,padT,0,padT+ph); g.addColorStop(0, rgba(col,.28)); g.addColorStop(1, rgba(col,0));
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle=col; ctx.lineWidth=2; ctx.lineJoin="round"; ctx.stroke(line);
+  // last price line
+  ctx.setLineDash([2,3]); ctx.lineWidth=1; ctx.strokeStyle=col;
+  const ly = Math.round(Y(last))+.5; ctx.beginPath(); ctx.moveTo(padL,ly); ctx.lineTo(padL+pw,ly); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+  axisTag(ctx, fmt(last), padL+pw, Y(last), col, "#fff", padR);
+
+  // crosshair
+  let shown = pts.length-1;
+  if(hover && hover.i < pts.length){
+    shown = hover.i;
+    const x = Math.round(X(ts[shown]))+.5, y = Math.round(hover.y)+.5;
+    ctx.setLineDash([4,4]); ctx.strokeStyle=T.muted; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+ph); ctx.moveTo(padL,y); ctx.lineTo(padL+pw,y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle=col; ctx.strokeStyle=T.panel; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(X(ts[shown]), Y(vs[shown]), 4.5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+    axisTag(ctx, fmt(hi - (hover.y-padT)/ph*(hi-lo)), padL+pw, hover.y, T.lab, T.labText, padR);
+    const dl = fmtDate(pts[shown].date); ctx.font="11px "+font; const w = ctx.measureText(dl).width+14;
+    const bx = Math.min(Math.max(x-w/2, padL), padL+pw-w);
+    ctx.fillStyle=T.lab; roundRect(ctx, bx, padT+ph+3, w, 20, 3); ctx.fill();
+    ctx.fillStyle=T.labText; ctx.textAlign="center"; ctx.fillText(dl, bx+w/2, padT+ph+13);
+  }
+  // legend
+  const p = pts[shown], prev = pts[shown-1];
+  const dc = prev ? p.price - prev.price : null, dpct = prev && prev.price ? dc/prev.price*100 : null;
+  const rp = (last-first)/first*100;
+  legend.innerHTML =
+    '<span>'+esc(fmtDate(p.date))+'</span>'+
+    '<span>Price <b class="'+cls(dc)+'">'+fmt(p.price)+' '+esc(nativeCur(c))+'</b>'+(eqLine(c,p.price)?' ('+eqLine(c,p.price)+')':'')+'</span>'+
+    (dc!=null ? '<span class="'+cls(dc)+'">'+sign(dc)+fmt(Math.abs(dc))+' ('+sign(dpct)+fmt(Math.abs(dpct),2)+'%)</span>' : '')+
+    '<span>'+esc(range)+' <b class="'+cls(rp)+'">'+sign(rp)+fmt(Math.abs(rp),2)+'%</b></span>';
+}
+function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function axisTag(ctx, text, x, y, bg, fg, w){
+  ctx.fillStyle=bg; roundRect(ctx, x+2, y-10, w-6, 20, 3); ctx.fill();
+  ctx.fillStyle=fg; ctx.textAlign="left"; ctx.textBaseline="middle"; ctx.fillText(text, x+8, y+.5);
+}
+
+/* ---------- dialogs ---------- */
+function openCompany(id){
+  editingId = id || null;
+  const f = $("#companyForm"); f.reset(); $("#companyErr").textContent = "";
+  const c = id ? companies[id] : null;
+  $("#companyDlgTitle").textContent = c ? "Edit "+c.ticker : "Add company";
+  $("#companySubmit").textContent = c ? "Save changes" : "Add company";
+  $("#priceHint").textContent = c ? "Changing it logs the new price under today's date" : "Logged under today's date";
+  const curSel = c ? nativeCur(c) : (CURRENCIES[settings.display] ? settings.display : "USD");
+  f.currency.innerHTML = currencyOptions(curSel, false) + (c && !CURRENCIES[curSel] ? '<option value="'+esc(curSel)+'" selected>'+esc(curSel)+'</option>' : '');
+  f.currency.value = curSel;
+  const setLabel = () => { $("#priceLabel").textContent = "Current price ("+f.currency.value+")"; };
+  setLabel(); f.currency.onchange = setLabel;
+  const ex = c ? exchangeOf(c) : null;
+  const exVal = ex ? ex.mic : (c && c.exchange ? "OTHER" : "");
+  f.exchangeMic.innerHTML = '<option value="">Not set</option>' +
+    EXCHANGES.map(x=>'<option value="'+x.mic+'">'+esc(x.short===x.name ? x.name : x.short+" – "+x.name)+'</option>').join("") +
+    '<option value="OTHER">Other…</option>';
+  f.exchangeMic.value = exVal;
+  f.exchangeOther.value = exVal==="OTHER" ? (c.exchange||"") : "";
+  f.country.innerHTML = '<option value="">Not set</option>' + Object.entries(COUNTRIES).sort((a,b)=>a[1].localeCompare(b[1])).map(([k,v])=>'<option value="'+k+'">'+esc(v)+'</option>').join("");
+  f.country.value = c ? countryOf(c) : "";
+  const syncOther = () => { $("#otherExField").hidden = f.exchangeMic.value!=="OTHER"; };
+  syncOther();
+  f.exchangeMic.onchange = () => {
+    syncOther();
+    const x = EXCHANGE_BY_MIC[f.exchangeMic.value];
+    if(x && CURRENCIES[x.currency]){ f.currency.value = x.currency; setLabel(); }
+    if(x) f.country.value = x.country;
+    if(f.exchangeMic.value==="OTHER") f.exchangeOther.focus();
+  };
+  if(c){
+    const q = quote(c);
+    f.ticker.value=c.ticker||""; f.name.value=c.name||""; f.sector.value=c.sector||"";
+    f.marketCap.value=c.marketCap||""; f.pe.value=c.pe??""; f.divYield.value=c.divYield??"";
+    f.website.value=c.website||""; f.notes.value=c.notes||""; f.price.value=q.price??"";
+  }
+  $("#companyDlg").showModal(); f.ticker.focus();
+}
+$("#companyForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target, err = $("#companyErr");
+  const ticker = f.ticker.value.trim().toUpperCase(), name = f.name.value.trim(), price = num(f.price.value);
+  if(!ticker){ err.textContent="Enter a ticker."; f.ticker.focus(); return; }
+  if(!name){ err.textContent="Enter the company name."; f.name.focus(); return; }
+  if(f.price.value!=="" && (price==null || price<0)){ err.textContent="Enter a price of 0 or more."; f.price.focus(); return; }
+  const exSel = f.exchangeMic.value, exOther = f.exchangeOther.value.trim();
+  if(exSel==="OTHER" && !exOther){ err.textContent="Enter the exchange name, or pick one from the list."; f.exchangeOther.focus(); return; }
+  const exPicked = EXCHANGE_BY_MIC[exSel] || null;
+  const dupe = Object.values(companies).find(c => c.ticker===ticker && c.id!==editingId);
+  if(dupe){ err.textContent=ticker+" is already on your list."; f.ticker.focus(); return; }
+  const base = editingId ? clone(companies[editingId]) : {id:newId(), history:[], createdAt:Date.now()};
+  Object.assign(base, {
+    ticker, name, exchangeMic: exPicked ? exPicked.mic : "", exchange: exPicked ? exPicked.short : (exSel==="OTHER" ? exOther : ""), country: f.country.value, sector:f.sector.value.trim(),
+    currency:f.currency.value || "USD", marketCap:f.marketCap.value.trim(),
+    pe:num(f.pe.value), divYield:num(f.divYield.value), website:f.website.value.trim(), notes:f.notes.value.trim(),
+    source:"manual", updatedAt:Date.now()
+  });
+  const current = quote(base).price;
+  if(price!=null && price!==current) upsertPoint(base, today(), price);
+  selectedId = base.id; $("#companyDlg").close();
+  saveCompany(base);
+  toast(editingId ? "Changes saved" : ticker+" added");
+});
+
+function openPrice(){
+  const f = $("#priceForm"); f.reset(); $("#priceErr").textContent="";
+  f.date.value = today(); f.date.max = today();
+  const pc = companies[selectedId]; $("#priceDlgTitle").textContent = "Log a price" + (pc ? " ("+nativeCur(pc)+")" : "");
+  $("#priceDlg").showModal(); f.price.focus();
+}
+$("#priceForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const f = e.target, err = $("#priceErr"), price = num(f.price.value), date = f.date.value;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){ err.textContent="Pick a date."; return; }
+  if(price==null || price<0){ err.textContent="Enter a price of 0 or more."; f.price.focus(); return; }
+  const c = clone(companies[selectedId]); upsertPoint(c, date, price); c.updatedAt=Date.now();
+  $("#priceDlg").close(); saveCompany(c); toast("Price logged");
+});
+
+function openConfirm(){
+  const c = companies[selectedId]; if(!c) return;
+  askConfirm("Delete company?", c.name+" ("+c.ticker+") and its "+(c.history||[]).length+" logged prices will be removed.", "Delete", () => { removeCompany(c.id); toast(c.ticker+" deleted"); });
+}
+$("#confirmOk").addEventListener("click", () => { $("#confirmDlg").close(); const cb = confirmCb; confirmCb = null; if(cb) cb(); });
+
+document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => {
+  if(e.target.closest("[data-close]") || e.target===d) d.close();
+}));
+
+/* ---------- examples ---------- */
+function walk(start, drift, vol, days){
+  const out=[]; let p=start; const d=new Date(); d.setDate(d.getDate()-days);
+  for(let i=0;i<days;i++){ d.setDate(d.getDate()+1); if(d.getDay()===0||d.getDay()===6) continue;
+    p = Math.max(0.5, p*(1+drift+vol*(Math.random()*2-1))); out.push({date:localISO(d), price:+p.toFixed(2)}); }
+  return out;
+}
+async function loadExamples(){
+  const now = Date.now();
+  const ex = [
+    {ticker:"NWND", name:"Northwind Energy", exchangeMic:"XNYS", exchange:"NYSE", sector:"Energy", marketCap:"48.2B", pe:14.1, divYield:3.4, history:walk(62,0.0006,0.018,420), notes:"Fictional example. Utility-scale solar and storage operator."},
+    {ticker:"HLXB", name:"Helix Biotherapeutics", exchangeMic:"XNAS", exchange:"Nasdaq", sector:"Healthcare", marketCap:"6.9B", pe:null, divYield:0, history:walk(38,0.0002,0.035,420), notes:"Fictional example. Phase 3 readout expected next quarter."},
+    {ticker:"ORBT", name:"Orbital Freight Systems", exchangeMic:"XNYS", exchange:"NYSE", sector:"Industrials", marketCap:"12.5B", pe:22.8, divYield:1.1, history:walk(115,-0.0004,0.02,420), notes:"Fictional example. Watching margins on the new cargo routes."},
+    {ticker:"APAG", name:"Aurora Pagos", exchangeMic:"XMEX", exchange:"BMV", country:"MX", currency:"MXN", sector:"Financials", marketCap:"92B", pe:18.3, divYield:1.8, history:walk(45,0.0005,0.02,420), notes:"Fictional example. Digital payments across Latin America."},
+    {ticker:"LGPW", name:"Lagos Grid Power", exchangeMic:"XNSA", exchange:"NGX", country:"NG", currency:"NGN", sector:"Utilities", marketCap:"410B", pe:9.6, divYield:5.2, history:walk(380,0.0008,0.022,420), notes:"Fictional example. Independent power producer."},
+    {ticker:"6891", name:"Kestrel Robotics", exchangeMic:"XTKS", exchange:"TSE", country:"JP", currency:"JPY", sector:"Industrials", marketCap:"1.1T", pe:27.4, divYield:0.9, history:walk(2450,0.0003,0.017,420), notes:"Fictional example. Factory automation arms."}
+  ].map((c,i)=>Object.assign({id:newId()+i, currency:"USD", country:"US", website:"", source:"manual", example:true, createdAt:now, updatedAt:now}, c));
+  for(const c of ex) await saveCompany(c);
+  toast("Example companies loaded");
+}
+
+/* ---------- events ---------- */
+$("#addBtn").addEventListener("click", () => openCompany());
+$("#displayCur").addEventListener("change", e => { settings.display = e.target.value; hover = null; saveSettings(); });
+$("#ratesBtn").addEventListener("click", () => {
+  $("#ratesErr").textContent = "";
+  $("#ratesBody").innerHTML = Object.keys(CURRENCIES).map(k =>
+    '<tr><td><b>'+k+'</b> <span style="color:var(--muted)">'+esc(CURRENCIES[k].name)+'</span></td>'+
+    '<td><input type="number" step="any" min="0" inputmode="decimal" name="rate-'+k+'" aria-label="'+k+' per 1 USD" value="'+(k==="USD"?1:settings.rates[k])+'"'+(k==="USD"?" disabled":"")+'></td></tr>').join("");
+  $("#r-asof").value = settings.ratesAsOf || "";
+  $("#ratesDlg").showModal();
+});
+$("#ratesForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const next = {USD:1};
+  for(const k of Object.keys(CURRENCIES)){ if(k==="USD") continue;
+    const v = num(e.target["rate-"+k].value);
+    if(v==null || v<=0){ $("#ratesErr").textContent = "Enter a rate above 0 for "+k+"."; e.target["rate-"+k].focus(); return; }
+    next[k] = v; }
+  settings.rates = next; settings.ratesAsOf = $("#r-asof").value || today();
+  $("#ratesDlg").close(); saveSettings(); toast("Rates saved");
+});
+$("#search").addEventListener("input", e => { query = e.target.value; renderBoard(); });
+$("#main").addEventListener("click", e => {
+  const r = e.target.closest("[data-range]");
+  if(r){ range = r.dataset.range; hover=null;
+    document.querySelectorAll("[data-range]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.range===range)));
+    draw(); return; }
+  const dd = e.target.closest("[data-del-date]");
+  if(dd){ const c = clone(companies[selectedId]); c.history = (c.history||[]).filter(p=>p.date!==dd.dataset.delDate); saveCompany(c); return; }
+  const a = e.target.closest("[data-act]"); if(!a) return;
+  const act = a.dataset.act;
+  if(act==="edit") openCompany(selectedId);
+  else if(act==="delete") openConfirm();
+  else if(act==="price") openPrice();
+});
+let rz; window.addEventListener("resize", () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => { if($("#detailDlg").open) draw(); }); });
+try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw); }catch(e){}
+new MutationObserver(draw).observe(document.documentElement, {attributes:true, attributeFilter:["data-theme"]});
+
+init();
+})();
+</script>
+</body>
+</html>
