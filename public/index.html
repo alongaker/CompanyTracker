@@ -293,7 +293,7 @@ dialog::backdrop{background:rgba(10,12,18,.55)}
     <div class="dlg-body">
       <div class="field"><label for="f-ticker">Ticker</label><input id="f-ticker" name="ticker" maxlength="10" required placeholder="e.g. ACME" autocomplete="off"></div>
       <div class="field"><label for="f-price" id="priceLabel">Current price</label><input id="f-price" name="price" type="number" step="any" min="0" inputmode="decimal" placeholder="0.00"><div class="hint" id="priceHint">Logged under today's date</div></div>
-      <div class="field full"><label for="f-name">Company name</label><input id="f-name" name="name" maxlength="80" required placeholder="Acme Corporation"></div>
+      <div class="field full"><label for="f-name">Company name</label><div style="display:flex;gap:8px"><input id="f-name" name="name" maxlength="80" required placeholder="Acme Corporation"><button type="button" class="btn" id="lookupBtn">Look up</button></div><div class="hint">Look up uses the ticker and a listed exchange.</div></div>
       <div class="field"><label for="f-exchange">Exchange</label><select id="f-exchange" name="exchangeMic"></select></div>
       <div class="field" id="otherExField" hidden><label for="f-exother">Exchange name</label><input id="f-exother" name="exchangeOther" maxlength="40" placeholder="e.g. Korea Exchange"></div>
       <div class="field"><label for="f-country">Country</label><select id="f-country" name="country"></select></div>
@@ -1197,6 +1197,26 @@ function openCompany(id){
   }
   $("#companyDlg").showModal(); f.ticker.focus();
 }
+$("#lookupBtn").addEventListener("click", async () => {
+  const err = $("#companyErr");
+  const ticker = $("#f-ticker").value.trim().toUpperCase();
+  const mic = $("#f-exchange").value;
+  err.textContent = "";
+  if(!ticker){ err.textContent = "Enter a ticker first."; $("#f-ticker").focus(); return; }
+  if(!mic || mic==="OTHER"){ err.textContent = "Pick a listed exchange before looking up."; $("#f-exchange").focus(); return; }
+  const btn = $("#lookupBtn");
+  btn.disabled = true; btn.textContent = "Looking…";
+  try{
+    const res = await fetch("/api/lookup?ticker="+encodeURIComponent(ticker)+"&mic="+encodeURIComponent(mic));
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){ err.textContent = data.error || "No match for that ticker on this exchange."; return; }
+    $("#f-name").value = data.name || "";
+  }catch(e){
+    err.textContent = "Couldn’t reach the lookup service.";
+  }finally{
+    btn.disabled = false; btn.textContent = "Look up";
+  }
+});
 $("#companyForm").addEventListener("submit", e => {
   e.preventDefault();
   const f = e.target, err = $("#companyErr");
