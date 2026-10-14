@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = Number(process.env.PORT) || 3000;
-const PUBLIC = path.join(__dirname, "public");
+const PAGE = path.join(__dirname, "index.html");
 const OPENFIGI = "https://api.openfigi.com/v3/mapping";
 
 const TYPES = {
@@ -74,18 +74,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const requested = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname).replace(/^\/+/, "");
-  const file = path.resolve(PUBLIC, requested);
-  if (file !== PUBLIC && !file.startsWith(PUBLIC + path.sep)) {
-    send(res, 403, "Forbidden");
+  if (url.pathname !== "/" && url.pathname !== "/index.html") {
+    send(res, 404, "Not found");
     return;
   }
-  fs.readFile(file, (err, data) => {
+  fs.readFile(PAGE, (err, data) => {
     if (err) {
       send(res, 404, "Not found");
       return;
     }
-    send(res, 200, data, TYPES[path.extname(file)] || "application/octet-stream");
+    send(res, 200, data, TYPES[".html"]);
   });
 });
 
